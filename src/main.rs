@@ -1,3 +1,4 @@
 fn main() {
-    println!("Hello, world!");
+    env_logger::init();
+    ui::run();
 }
