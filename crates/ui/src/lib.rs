@@ -6,6 +6,7 @@ pub mod texture_atlas;
 use camera::CameraUniform;
 use mesh::{Material, Mesh, MeshInstance, MeshVertex};
 use std::borrow::Cow;
+use texture_atlas::TextureAtlas;
 use wgpu::{util::DeviceExt, Surface};
 use winit::{
     dpi::PhysicalSize,
@@ -26,8 +27,8 @@ struct State<'window> {
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
 
-    materials: Vec<Material>,
-    meshes: Vec<Mesh>,
+    material: Material,
+    mesh: Mesh,
 }
 
 impl<'window> State<'window> {
@@ -91,9 +92,9 @@ impl<'window> State<'window> {
             label: Some("camera_bind_group"),
         });
 
-        let mut materials = vec![];
-
-        let bamboo_bind_group_layout =
+        let atlas_size = 512;
+        let mut texture_atlas: TextureAtlas = TextureAtlas::new(&device, &queue, atlas_size);
+        let atlas_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
@@ -113,58 +114,60 @@ impl<'window> State<'window> {
                         count: None,
                     },
                 ],
-                label: Some("bamboo texture_bind_group_layout"),
+                label: Some("atlas texture_bind_group_layout"),
             });
-        materials.push(Material::load_from_file(
-            String::from("res/bamboo.png"),
+        let atlas_material = Material::new(
+            "atlas".to_string(),
             &device,
-            &queue,
-            &bamboo_bind_group_layout,
-        ));
+            &atlas_bind_group_layout,
+            texture_atlas.texture(),
+        );
 
-        let bamboo_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("bamboo Vertex Buffer"),
-            contents: bytemuck::cast_slice(MeshVertex::VERTICES),
+        let bamboo_img = image::io::Reader::open("res/bamboo.png")
+            .unwrap()
+            .decode()
+            .unwrap();
+        let tree_img = image::io::Reader::open("res/happy-tree.png")
+            .unwrap()
+            .decode()
+            .unwrap();
+        let tree_alloc = texture_atlas
+            .allocate(&queue, &tree_img.to_rgba8())
+            .unwrap();
+        let bamboo_alloc = texture_atlas
+            .allocate(&queue, &bamboo_img.to_rgba8())
+            .unwrap();
+
+        let tree_coords = MeshVertex::tex_coords_from(
+            atlas_size,
+            (tree_alloc.rectangle.min.x, tree_alloc.rectangle.min.y),
+            (tree_alloc.rectangle.max.x, tree_alloc.rectangle.max.y),
+        );
+        let bamboo_coords = MeshVertex::tex_coords_from(
+            atlas_size,
+            (bamboo_alloc.rectangle.min.x, bamboo_alloc.rectangle.min.y),
+            (bamboo_alloc.rectangle.max.x, bamboo_alloc.rectangle.max.y),
+        );
+
+        let mut coords: Vec<MeshVertex> = Vec::new();
+        coords.extend(&tree_coords);
+        coords.extend(&bamboo_coords);
+
+        let atlas_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("atlas Vertex Buffer"),
+            contents: bytemuck::cast_slice(&coords),
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        let bamboo_index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("bamboo Index Buffer"),
+        let atlas_index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("atlas Index Buffer"),
             contents: bytemuck::cast_slice(MeshVertex::INDICES),
             usage: wgpu::BufferUsages::INDEX,
         });
 
-        let bamboo_instances = vec![
-            MeshInstance {
-                position: [0.0, 00.0],
-                size: [100.0, 100.0],
-                color: [1.0, 1.0, 1.0, 1.0],
-            },
-            MeshInstance {
-                position: [250.0, 250.0],
-                size: [200.0, 200.0],
-                color: [1.0, 1.0, 1.0, 1.0],
-            },
-        ];
-
-        let bamboo_instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("bamboo Instance Buffer"),
-            contents: bytemuck::cast_slice(&bamboo_instances),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let bamboo_quad_mesh = Mesh::new(
-            String::from("bamboo"),
-            bamboo_vertex_buffer,
-            bamboo_index_buffer,
-            Some(0),
-            bamboo_instances,
-            bamboo_instance_buffer,
-        );
-
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[&camera_bind_group_layout, &bamboo_bind_group_layout],
+            bind_group_layouts: &[&camera_bind_group_layout, &atlas_bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -202,6 +205,33 @@ impl<'window> State<'window> {
         };
         surface.configure(&device, &config);
 
+        let atlas_image_instances = vec![
+            MeshInstance {
+                position: [0.0, 0.0],
+                size: [200.0, 200.0],
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
+            MeshInstance {
+                position: [200.0, 200.0],
+                size: [200.0, 200.0],
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
+        ];
+
+        let atlas_instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("atlas Instance Buffer"),
+            contents: bytemuck::cast_slice(&atlas_image_instances),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let atlas_mesh = Mesh::new(
+            String::from("atlas"),
+            atlas_vertex_buffer,
+            atlas_index_buffer,
+            atlas_image_instances,
+            atlas_instance_buffer,
+        );
+
         Self {
             window,
             surface,
@@ -213,8 +243,8 @@ impl<'window> State<'window> {
             camera_buffer,
             camera_bind_group,
 
-            meshes: vec![bamboo_quad_mesh],
-            materials,
+            mesh: atlas_mesh,
+            material: atlas_material,
         }
     }
 
@@ -235,9 +265,7 @@ impl<'window> State<'window> {
     }
 
     fn update(&mut self) {
-        for mesh in &mut self.meshes {
-            mesh.update();
-        }
+        self.mesh.update();
     }
 
     fn draw(&mut self) {
@@ -273,9 +301,7 @@ impl<'window> State<'window> {
             });
             rpass.set_pipeline(&self.render_pipeline);
             rpass.set_bind_group(0, &self.camera_bind_group, &[]);
-            for mesh in &self.meshes {
-                mesh.draw(&mut rpass, &self.materials);
-            }
+            self.mesh.draw(&mut rpass, &self.material);
         }
 
         self.queue.submit(Some(encoder.finish()));

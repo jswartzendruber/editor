@@ -9,26 +9,38 @@ pub struct MeshVertex {
 }
 
 impl MeshVertex {
+    #[rustfmt::skip]
     pub const VERTICES: &'static [MeshVertex] = &[
-        MeshVertex {
-            position: [0.0, 1.0],
-            tex_coords: [0.0, 1.0],
-        },
-        MeshVertex {
-            position: [0.0, 0.0],
-            tex_coords: [0.0, 0.0],
-        },
-        MeshVertex {
-            position: [1.0, 1.0],
-            tex_coords: [1.0, 1.0],
-        },
-        MeshVertex {
-            position: [1.0, 0.0],
-            tex_coords: [1.0, 0.0],
-        },
+        MeshVertex { position: [0.0, 1.0], tex_coords: [0.0, 1.0] },
+        MeshVertex { position: [0.0, 0.0], tex_coords: [0.0, 0.0] },
+        MeshVertex { position: [1.0, 1.0], tex_coords: [1.0, 1.0] },
+        MeshVertex { position: [1.0, 0.0], tex_coords: [1.0, 1.0] },
     ];
 
     pub const INDICES: &'static [u16] = &[0, 1, 2, 2, 3, 1];
+
+    pub fn tex_coords_from(
+        atlas_size: u16,
+        top_left: (i32, i32),
+        bottom_right: (i32, i32),
+    ) -> Vec<MeshVertex> {
+        let mut vertices = Self::VERTICES.to_vec();
+
+        let atlas_size = atlas_size as f32;
+
+        // Normalize the coordinates from range [0, atlas_size] to [0,1] for displaying
+        let ntlx = top_left.0 as f32 / atlas_size;
+        let ntly = top_left.1 as f32 / atlas_size;
+        let nbrx = bottom_right.0 as f32 / atlas_size;
+        let nbry = bottom_right.1 as f32 / atlas_size;
+
+        vertices[0].tex_coords = [ntlx, nbry];
+        vertices[1].tex_coords = [ntlx, ntly];
+        vertices[2].tex_coords = [nbrx, nbry];
+        vertices[3].tex_coords = [nbrx, ntly];
+
+        vertices
+    }
 
     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
@@ -86,20 +98,16 @@ impl MeshInstance {
 
 pub struct Material {
     pub name: String,
-    pub texture: Texture,
     pub bind_group: wgpu::BindGroup,
 }
 
 impl Material {
-    pub fn load_from_file(
-        path: String,
+    pub fn new(
+        name: String,
         device: &Device,
-        queue: &Queue,
         bind_group_layout: &wgpu::BindGroupLayout,
+        texture: &Texture,
     ) -> Self {
-        let texture_bytes = image::io::Reader::open(&path).unwrap().decode().unwrap();
-        let texture = Texture::from_image(device, queue, &texture_bytes, Some(&path));
-
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: bind_group_layout,
             entries: &[
@@ -112,14 +120,21 @@ impl Material {
                     resource: wgpu::BindingResource::Sampler(&texture.sampler),
                 },
             ],
-            label: Some("texture_bind_group"),
+            label: Some("Material texture_bind_group"),
         });
 
-        Self {
-            name: path,
-            texture,
-            bind_group,
-        }
+        Self { name, bind_group }
+    }
+
+    pub fn load_from_file(
+        path: String,
+        device: &Device,
+        queue: &Queue,
+        bind_group_layout: &wgpu::BindGroupLayout,
+    ) -> Self {
+        let texture_bytes = image::io::Reader::open(&path).unwrap().decode().unwrap();
+        let texture = Texture::from_image(device, queue, &texture_bytes, Some(&path));
+        Self::new(path, device, bind_group_layout, &texture)
     }
 }
 
@@ -127,7 +142,6 @@ pub struct Mesh {
     pub name: String,
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
-    pub material_idx: Option<usize>,
     pub instances: Vec<MeshInstance>,
     pub instance_buffer: wgpu::Buffer,
 }
@@ -137,7 +151,6 @@ impl Mesh {
         name: String,
         vertex_buffer: wgpu::Buffer,
         index_buffer: wgpu::Buffer,
-        material_idx: Option<usize>,
         instances: Vec<MeshInstance>,
         instance_buffer: wgpu::Buffer,
     ) -> Self {
@@ -145,7 +158,6 @@ impl Mesh {
             name,
             vertex_buffer,
             index_buffer,
-            material_idx,
             instances,
             instance_buffer,
         }
@@ -156,11 +168,9 @@ impl Mesh {
     pub fn draw<'mats: 'rpass, 'mesh: 'rpass, 'rpass>(
         &'mesh self,
         rpass: &mut wgpu::RenderPass<'rpass>,
-        materials: &'mats Vec<Material>,
+        material: &'mats Material,
     ) {
-        if let Some(material_idx) = &self.material_idx {
-            rpass.set_bind_group(1, &materials[*material_idx].bind_group, &[]);
-        }
+        rpass.set_bind_group(1, &material.bind_group, &[]);
         rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         rpass.set_vertex_buffer(1, self.instance_buffer.slice(..));
         rpass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);

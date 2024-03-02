@@ -1,4 +1,4 @@
-use image::GenericImageView;
+use image::{DynamicImage, GenericImageView};
 
 pub struct Texture {
     pub texture: wgpu::Texture,
@@ -15,6 +15,12 @@ impl Texture {
     ) -> Self {
         let img = image::load_from_memory(bytes).unwrap();
         Self::from_image(device, queue, &img, Some(label))
+    }
+
+    /// Creates an empty texture with the dimensions of size * size
+    pub fn from_size(device: &wgpu::Device, queue: &wgpu::Queue, size: u16) -> Self {
+        let img = DynamicImage::new(size as u32, size as u32, image::ColorType::Rgba8);
+        Self::from_image(device, queue, &img, Some("Empty sized texture"))
     }
 
     pub fn from_image(
