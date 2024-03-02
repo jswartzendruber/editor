@@ -1,0 +1,12 @@
+[package]
+name = "editor"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+members = [
+    "crates/ui",
+]
+
+[dependencies]
+ui = { path = "crates/ui" }
