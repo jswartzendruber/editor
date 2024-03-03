@@ -16,7 +16,9 @@ struct CameraUniform {
 struct InstanceInput {
     @location(5) position: vec2f,
     @location(6) scale: vec2f,
-    @location(7) color: vec4f,
+    @location(7) atlas_offset: vec2f,
+    @location(8) atlas_scale: vec2f,
+    @location(9) color: vec4f,
 }
 
 @group(0) @binding(0)
@@ -26,7 +28,7 @@ var<uniform> camera: CameraUniform;
 fn vs_main(model: VertexInput, instance: InstanceInput) -> VertexOutput {
     var out: VertexOutput;
     out.color = instance.color;
-    out.tex_coords = model.tex_coords;
+    out.tex_coords = model.tex_coords * instance.atlas_scale + instance.atlas_offset;
     out.clip_position = camera.projection * vec4f(model.position * instance.scale + instance.position, 0.0, 1.0);
     return out;
 }

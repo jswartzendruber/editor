@@ -92,7 +92,7 @@ impl<'window> State<'window> {
             label: Some("camera_bind_group"),
         });
 
-        let atlas_size = 512;
+        let atlas_size = 700;
         let mut texture_atlas: TextureAtlas = TextureAtlas::new(&device, &queue, atlas_size);
         let atlas_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -131,31 +131,30 @@ impl<'window> State<'window> {
             .unwrap()
             .decode()
             .unwrap();
+        let hello_img = image::io::Reader::open("res/hello.png")
+            .unwrap()
+            .decode()
+            .unwrap();
+        let rect_img = image::io::Reader::open("res/rect.png")
+            .unwrap()
+            .decode()
+            .unwrap();
         let tree_alloc = texture_atlas
             .allocate(&queue, &tree_img.to_rgba8())
             .unwrap();
         let bamboo_alloc = texture_atlas
             .allocate(&queue, &bamboo_img.to_rgba8())
             .unwrap();
-
-        let tree_coords = MeshVertex::tex_coords_from(
-            atlas_size,
-            (tree_alloc.rectangle.min.x, tree_alloc.rectangle.min.y),
-            (tree_alloc.rectangle.max.x, tree_alloc.rectangle.max.y),
-        );
-        let bamboo_coords = MeshVertex::tex_coords_from(
-            atlas_size,
-            (bamboo_alloc.rectangle.min.x, bamboo_alloc.rectangle.min.y),
-            (bamboo_alloc.rectangle.max.x, bamboo_alloc.rectangle.max.y),
-        );
-
-        let mut coords: Vec<MeshVertex> = Vec::new();
-        coords.extend(&tree_coords);
-        coords.extend(&bamboo_coords);
+        let hello_alloc = texture_atlas
+            .allocate(&queue, &hello_img.to_rgba8())
+            .unwrap();
+        let rect_alloc = texture_atlas
+            .allocate(&queue, &rect_img.to_rgba8())
+            .unwrap();
 
         let atlas_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("atlas Vertex Buffer"),
-            contents: bytemuck::cast_slice(&coords),
+            contents: bytemuck::cast_slice(MeshVertex::VERTICES),
             usage: wgpu::BufferUsages::VERTEX,
         });
 
@@ -208,12 +207,54 @@ impl<'window> State<'window> {
         let atlas_image_instances = vec![
             MeshInstance {
                 position: [0.0, 0.0],
-                size: [200.0, 200.0],
+                size: [300.0, 300.0],
+                atlas_offset: [
+                    tree_alloc.rectangle.min.x as f32 / atlas_size as f32,
+                    tree_alloc.rectangle.min.y as f32 / atlas_size as f32,
+                ],
+                atlas_scale: [
+                    tree_alloc.rectangle.width() as f32 / atlas_size as f32,
+                    tree_alloc.rectangle.height() as f32 / atlas_size as f32,
+                ],
                 color: [1.0, 1.0, 1.0, 1.0],
             },
             MeshInstance {
-                position: [200.0, 200.0],
-                size: [200.0, 200.0],
+                position: [300.0, 300.0],
+                size: [300.0, 300.0],
+                atlas_offset: [
+                    bamboo_alloc.rectangle.min.x as f32 / atlas_size as f32,
+                    bamboo_alloc.rectangle.min.y as f32 / atlas_size as f32,
+                ],
+                atlas_scale: [
+                    bamboo_alloc.rectangle.width() as f32 / atlas_size as f32,
+                    bamboo_alloc.rectangle.height() as f32 / atlas_size as f32,
+                ],
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
+            MeshInstance {
+                position: [0.0, 300.0],
+                size: [300.0, 300.0],
+                atlas_offset: [
+                    hello_alloc.rectangle.min.x as f32 / atlas_size as f32,
+                    hello_alloc.rectangle.min.y as f32 / atlas_size as f32,
+                ],
+                atlas_scale: [
+                    hello_alloc.rectangle.width() as f32 / atlas_size as f32,
+                    hello_alloc.rectangle.height() as f32 / atlas_size as f32,
+                ],
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
+            MeshInstance {
+                position: [300.0, 150.0],
+                size: [300.0, 150.0],
+                atlas_offset: [
+                    rect_alloc.rectangle.min.x as f32 / atlas_size as f32,
+                    rect_alloc.rectangle.min.y as f32 / atlas_size as f32,
+                ],
+                atlas_scale: [
+                    rect_alloc.rectangle.width() as f32 / atlas_size as f32,
+                    rect_alloc.rectangle.height() as f32 / atlas_size as f32,
+                ],
                 color: [1.0, 1.0, 1.0, 1.0],
             },
         ];
@@ -288,7 +329,7 @@ impl<'window> State<'window> {
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
                             r: 0.0,
-                            g: 0.0,
+                            g: 0.05,
                             b: 0.0,
                             a: 1.0,
                         }),

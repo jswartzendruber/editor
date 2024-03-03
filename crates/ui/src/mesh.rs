@@ -14,7 +14,7 @@ impl MeshVertex {
         MeshVertex { position: [0.0, 1.0], tex_coords: [0.0, 1.0] },
         MeshVertex { position: [0.0, 0.0], tex_coords: [0.0, 0.0] },
         MeshVertex { position: [1.0, 1.0], tex_coords: [1.0, 1.0] },
-        MeshVertex { position: [1.0, 0.0], tex_coords: [1.0, 1.0] },
+        MeshVertex { position: [1.0, 0.0], tex_coords: [1.0, 0.0] },
     ];
 
     pub const INDICES: &'static [u16] = &[0, 1, 2, 2, 3, 1];
@@ -67,6 +67,17 @@ impl MeshVertex {
 pub struct MeshInstance {
     pub position: [f32; 2],
     pub size: [f32; 2],
+
+    /// The top left corner of the requested position in the atlas.
+    /// This position should be normalized to the size of the atlas.
+    /// So if we want position (0, 128) in a 512x512 atlas, this number
+    /// would be (0, 0.25)
+    pub atlas_offset: [f32; 2],
+
+    /// How big the atlas tile is relative to the atlas.
+    /// Something that is 256x128 in a 512x512 atlas would be (0.5, 0.25)
+    pub atlas_scale: [f32; 2],
+
     pub color: [f32; 4],
 }
 
@@ -89,6 +100,16 @@ impl MeshInstance {
                 wgpu::VertexAttribute {
                     offset: std::mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
                     shader_location: 7,
+                    format: wgpu::VertexFormat::Float32x2,
+                },
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 6]>() as wgpu::BufferAddress,
+                    shader_location: 8,
+                    format: wgpu::VertexFormat::Float32x2,
+                },
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 8]>() as wgpu::BufferAddress,
+                    shader_location: 9,
                     format: wgpu::VertexFormat::Float32x4,
                 },
             ],
