@@ -1,5 +1,8 @@
-use crate::texture::Texture;
-use wgpu::{Device, Queue};
+use crate::{
+    texture::Texture,
+    texture_atlas::{TextureAtlas, TextureId},
+};
+use wgpu::{util::DeviceExt, Device, Queue};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -165,26 +168,76 @@ pub struct Mesh {
     pub index_buffer: wgpu::Buffer,
     pub instances: Vec<MeshInstance>,
     pub instance_buffer: wgpu::Buffer,
+    pub atlas: TextureAtlas,
+    dirty: bool,
 }
 
 impl Mesh {
-    pub fn new(
-        name: String,
-        vertex_buffer: wgpu::Buffer,
-        index_buffer: wgpu::Buffer,
-        instances: Vec<MeshInstance>,
-        instance_buffer: wgpu::Buffer,
-    ) -> Self {
+    pub fn new(device: &wgpu::Device, name: String, atlas: TextureAtlas) -> Self {
+        let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("atlas Instance Buffer"),
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            size: (std::mem::size_of::<MeshInstance>() * 1024) as u64,
+            mapped_at_creation: false,
+        });
+
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("atlas Vertex Buffer"),
+            contents: bytemuck::cast_slice(MeshVertex::VERTICES),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("atlas Index Buffer"),
+            contents: bytemuck::cast_slice(MeshVertex::INDICES),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
         Self {
             name,
             vertex_buffer,
             index_buffer,
-            instances,
+            instances: vec![],
             instance_buffer,
+            atlas,
+            dirty: false,
         }
     }
 
-    pub fn update(&mut self) {}
+    pub fn add_instance(
+        &mut self,
+        texture_id: TextureId,
+        position: [f32; 2],
+        size: [f32; 2],
+        color: [f32; 4],
+    ) {
+        let atlas_size = self.atlas.size() as f32;
+        let subimg_dimensions = self.atlas.get_allocation(texture_id).rectangle;
+
+        self.dirty = true;
+        self.instances.push(MeshInstance {
+            position,
+            size,
+            atlas_offset: [
+                subimg_dimensions.min.x as f32 / atlas_size,
+                subimg_dimensions.min.y as f32 / atlas_size,
+            ],
+            atlas_scale: [
+                subimg_dimensions.width() as f32 / atlas_size,
+                subimg_dimensions.height() as f32 / atlas_size,
+            ],
+            color,
+        });
+    }
+
+    pub fn update(&mut self, queue: &wgpu::Queue) {
+        queue.write_buffer(
+            &self.instance_buffer,
+            0,
+            bytemuck::cast_slice(&self.instances),
+        );
+        self.dirty = false;
+    }
 
     pub fn draw<'mats: 'rpass, 'mesh: 'rpass, 'rpass>(
         &'mesh self,
