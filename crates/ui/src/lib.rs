@@ -4,8 +4,10 @@ pub mod texture;
 pub mod texture_atlas;
 
 use camera::CameraUniform;
+use etagere::Allocation;
 use mesh::{Material, Mesh, MeshInstance, MeshVertex};
 use std::borrow::Cow;
+use texture::Texture;
 use texture_atlas::TextureAtlas;
 use wgpu::{util::DeviceExt, Surface};
 use winit::{
@@ -29,6 +31,60 @@ struct State<'window> {
 
     material: Material,
     mesh: Mesh,
+}
+
+struct AtlasThing {
+    atlas: TextureAtlas,
+    instances: Vec<MeshInstance>,
+    allocations: Vec<Allocation>,
+}
+
+impl AtlasThing {
+    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, size: u16) -> Self {
+        Self {
+            atlas: TextureAtlas::new(device, queue, size),
+            instances: vec![],
+            allocations: vec![],
+        }
+    }
+
+    pub fn add_texture_to_atlas_from_file(&mut self, queue: &wgpu::Queue, path: &str) -> usize {
+        let img = image::io::Reader::open(path).unwrap().decode().unwrap();
+        let allocation = self.atlas.allocate(&queue, &img.to_rgba8()).unwrap();
+        let idx = self.allocations.len();
+        self.allocations.push(allocation);
+        idx
+    }
+
+    /// accepts the texture index returned from add_texture_to_atlas_from_file
+    pub fn add_instance(
+        &mut self,
+        texture_id: usize,
+        position: [f32; 2],
+        size: [f32; 2],
+        color: [f32; 4],
+    ) {
+        let atlas_size = self.atlas.size() as f32;
+        let subimg_dimensions = self.allocations[texture_id].rectangle;
+
+        self.instances.push(MeshInstance {
+            position,
+            size,
+            atlas_offset: [
+                subimg_dimensions.min.x as f32 / atlas_size,
+                subimg_dimensions.min.y as f32 / atlas_size,
+            ],
+            atlas_scale: [
+                subimg_dimensions.width() as f32 / atlas_size,
+                subimg_dimensions.height() as f32 / atlas_size,
+            ],
+            color,
+        });
+    }
+
+    pub fn texture(&self) -> &Texture {
+        self.atlas.texture()
+    }
 }
 
 impl<'window> State<'window> {
@@ -93,7 +149,7 @@ impl<'window> State<'window> {
         });
 
         let atlas_size = 700;
-        let mut texture_atlas: TextureAtlas = TextureAtlas::new(&device, &queue, atlas_size);
+        let mut atlas = AtlasThing::new(&device, &queue, atlas_size);
         let atlas_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
@@ -120,37 +176,44 @@ impl<'window> State<'window> {
             "atlas".to_string(),
             &device,
             &atlas_bind_group_layout,
-            texture_atlas.texture(),
+            atlas.texture(),
         );
 
-        let bamboo_img = image::io::Reader::open("res/bamboo.png")
-            .unwrap()
-            .decode()
-            .unwrap();
-        let tree_img = image::io::Reader::open("res/happy-tree.png")
-            .unwrap()
-            .decode()
-            .unwrap();
-        let hello_img = image::io::Reader::open("res/hello.png")
-            .unwrap()
-            .decode()
-            .unwrap();
-        let rect_img = image::io::Reader::open("res/rect.png")
-            .unwrap()
-            .decode()
-            .unwrap();
-        let tree_alloc = texture_atlas
-            .allocate(&queue, &tree_img.to_rgba8())
-            .unwrap();
-        let bamboo_alloc = texture_atlas
-            .allocate(&queue, &bamboo_img.to_rgba8())
-            .unwrap();
-        let hello_alloc = texture_atlas
-            .allocate(&queue, &hello_img.to_rgba8())
-            .unwrap();
-        let rect_alloc = texture_atlas
-            .allocate(&queue, &rect_img.to_rgba8())
-            .unwrap();
+        let bamboo_atlas_idx = atlas.add_texture_to_atlas_from_file(&queue, "res/bamboo.png");
+        let tree_atlas_idx = atlas.add_texture_to_atlas_from_file(&queue, "res/happy-tree.png");
+        let hello_atlas_idx = atlas.add_texture_to_atlas_from_file(&queue, "res/hello.png");
+        let rect_atlas_idx = atlas.add_texture_to_atlas_from_file(&queue, "res/rect.png");
+
+        atlas.add_instance(
+            bamboo_atlas_idx,
+            [0.0, 0.0],
+            [300.0, 300.0],
+            [1.0, 1.0, 1.0, 1.0],
+        );
+        atlas.add_instance(
+            tree_atlas_idx,
+            [300.0, 300.0],
+            [300.0, 300.0],
+            [1.0, 1.0, 1.0, 1.0],
+        );
+        atlas.add_instance(
+            hello_atlas_idx,
+            [0.0, 300.0],
+            [300.0, 300.0],
+            [1.0, 1.0, 1.0, 1.0],
+        );
+        atlas.add_instance(
+            rect_atlas_idx,
+            [300.0, 150.0],
+            [300.0, 150.0],
+            [1.0, 1.0, 1.0, 1.0],
+        );
+
+        let atlas_instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("atlas Instance Buffer"),
+            contents: bytemuck::cast_slice(&atlas.instances),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
 
         let atlas_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("atlas Vertex Buffer"),
@@ -163,6 +226,14 @@ impl<'window> State<'window> {
             contents: bytemuck::cast_slice(MeshVertex::INDICES),
             usage: wgpu::BufferUsages::INDEX,
         });
+
+        let atlas_mesh = Mesh::new(
+            String::from("atlas"),
+            atlas_vertex_buffer,
+            atlas_index_buffer,
+            atlas.instances,
+            atlas_instance_buffer,
+        );
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
@@ -203,75 +274,6 @@ impl<'window> State<'window> {
             view_formats: vec![],
         };
         surface.configure(&device, &config);
-
-        let atlas_image_instances = vec![
-            MeshInstance {
-                position: [0.0, 0.0],
-                size: [300.0, 300.0],
-                atlas_offset: [
-                    tree_alloc.rectangle.min.x as f32 / atlas_size as f32,
-                    tree_alloc.rectangle.min.y as f32 / atlas_size as f32,
-                ],
-                atlas_scale: [
-                    tree_alloc.rectangle.width() as f32 / atlas_size as f32,
-                    tree_alloc.rectangle.height() as f32 / atlas_size as f32,
-                ],
-                color: [1.0, 1.0, 1.0, 1.0],
-            },
-            MeshInstance {
-                position: [300.0, 300.0],
-                size: [300.0, 300.0],
-                atlas_offset: [
-                    bamboo_alloc.rectangle.min.x as f32 / atlas_size as f32,
-                    bamboo_alloc.rectangle.min.y as f32 / atlas_size as f32,
-                ],
-                atlas_scale: [
-                    bamboo_alloc.rectangle.width() as f32 / atlas_size as f32,
-                    bamboo_alloc.rectangle.height() as f32 / atlas_size as f32,
-                ],
-                color: [1.0, 1.0, 1.0, 1.0],
-            },
-            MeshInstance {
-                position: [0.0, 300.0],
-                size: [300.0, 300.0],
-                atlas_offset: [
-                    hello_alloc.rectangle.min.x as f32 / atlas_size as f32,
-                    hello_alloc.rectangle.min.y as f32 / atlas_size as f32,
-                ],
-                atlas_scale: [
-                    hello_alloc.rectangle.width() as f32 / atlas_size as f32,
-                    hello_alloc.rectangle.height() as f32 / atlas_size as f32,
-                ],
-                color: [1.0, 1.0, 1.0, 1.0],
-            },
-            MeshInstance {
-                position: [300.0, 150.0],
-                size: [300.0, 150.0],
-                atlas_offset: [
-                    rect_alloc.rectangle.min.x as f32 / atlas_size as f32,
-                    rect_alloc.rectangle.min.y as f32 / atlas_size as f32,
-                ],
-                atlas_scale: [
-                    rect_alloc.rectangle.width() as f32 / atlas_size as f32,
-                    rect_alloc.rectangle.height() as f32 / atlas_size as f32,
-                ],
-                color: [1.0, 1.0, 1.0, 1.0],
-            },
-        ];
-
-        let atlas_instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("atlas Instance Buffer"),
-            contents: bytemuck::cast_slice(&atlas_image_instances),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let atlas_mesh = Mesh::new(
-            String::from("atlas"),
-            atlas_vertex_buffer,
-            atlas_index_buffer,
-            atlas_image_instances,
-            atlas_instance_buffer,
-        );
 
         Self {
             window,

@@ -49,6 +49,8 @@ pub struct TextureAtlas {
     allocator: AtlasAllocator,
     /// The current atlas texture state
     texture: Texture,
+    /// The size of the atlas
+    size: u16,
 }
 
 #[derive(Debug)]
@@ -65,6 +67,7 @@ impl TextureAtlas {
         Self {
             allocator: AtlasAllocator::new(etagere::size2(size as i32, size as i32)),
             texture: Texture::from_size(device, queue, size),
+            size,
         }
     }
 
@@ -115,5 +118,9 @@ impl TextureAtlas {
 
     pub fn texture(&self) -> &Texture {
         &self.texture
+    }
+
+    pub fn size(&self) -> u16 {
+        self.size
     }
 }
