@@ -2,6 +2,7 @@ pub mod camera;
 pub mod mesh;
 pub mod texture;
 pub mod texture_atlas;
+pub mod layout;
 
 use camera::CameraUniform;
 use mesh::{Material, Mesh, MeshInstance, MeshVertex};

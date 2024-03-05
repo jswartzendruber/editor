@@ -42,7 +42,7 @@ impl TextureAtlas {
             .unwrap()
             .decode()
             .map_err(AtlasError::ImageLoadingError)?;
-        let allocation = self.atlas.allocate(&queue, &img.to_rgba8())?;
+        let allocation = self.atlas.allocate(queue, &img.to_rgba8())?;
         let idx = self.allocations.len();
         self.allocations.push(allocation);
         Ok(TextureId(idx))
@@ -106,7 +106,7 @@ impl AtlasInternal {
                     z: 0,
                 },
             },
-            &img,
+            img,
             wgpu::ImageDataLayout {
                 offset: 0,
                 bytes_per_row: Some(4 * img.width()),

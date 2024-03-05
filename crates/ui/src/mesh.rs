@@ -22,29 +22,6 @@ impl MeshVertex {
 
     pub const INDICES: &'static [u16] = &[0, 1, 2, 2, 3, 1];
 
-    pub fn tex_coords_from(
-        atlas_size: u16,
-        top_left: (i32, i32),
-        bottom_right: (i32, i32),
-    ) -> Vec<MeshVertex> {
-        let mut vertices = Self::VERTICES.to_vec();
-
-        let atlas_size = atlas_size as f32;
-
-        // Normalize the coordinates from range [0, atlas_size] to [0,1] for displaying
-        let ntlx = top_left.0 as f32 / atlas_size;
-        let ntly = top_left.1 as f32 / atlas_size;
-        let nbrx = bottom_right.0 as f32 / atlas_size;
-        let nbry = bottom_right.1 as f32 / atlas_size;
-
-        vertices[0].tex_coords = [ntlx, nbry];
-        vertices[1].tex_coords = [ntlx, ntly];
-        vertices[2].tex_coords = [nbrx, nbry];
-        vertices[3].tex_coords = [nbrx, ntly];
-
-        vertices
-    }
-
     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<MeshVertex>() as wgpu::BufferAddress,
