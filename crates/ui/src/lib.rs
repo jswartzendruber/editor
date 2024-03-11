@@ -1,8 +1,8 @@
 pub mod camera;
+pub mod layout;
 pub mod mesh;
 pub mod texture;
 pub mod texture_atlas;
-pub mod layout;
 
 use camera::CameraUniform;
 use mesh::{Material, Mesh, MeshInstance, MeshVertex};
@@ -64,7 +64,8 @@ impl<'window> State<'window> {
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
         });
 
-        let camera_uniform = CameraUniform::new_ortho(0.0, 800.0, 600.0, 0.0, 1.0, -1.0);
+        let camera_uniform =
+            CameraUniform::new_ortho(0.0, size.width as f32, size.height as f32, 0.0, 1.0, -1.0);
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Camera Buffer"),
             contents: bytemuck::cast_slice(&[camera_uniform]),
@@ -166,9 +167,6 @@ impl<'window> State<'window> {
             push_constant_ranges: &[],
         });
 
-        let swapchain_capabilities = surface.get_capabilities(&adapter);
-        let swapchain_format = swapchain_capabilities.formats[0];
-
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
@@ -180,7 +178,7 @@ impl<'window> State<'window> {
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
-                targets: &[Some(swapchain_format.into())],
+                targets: &[Some(wgpu::TextureFormat::Rgba8UnormSrgb.into())],
             }),
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
@@ -309,7 +307,10 @@ impl<'window> State<'window> {
 
 pub fn run() {
     let event_loop = EventLoop::new().unwrap();
-    let window = WindowBuilder::new().build(&event_loop).unwrap();
+    let window = WindowBuilder::new()
+        .with_inner_size(PhysicalSize::new(1360, 720))
+        .build(&event_loop)
+        .unwrap();
     let mut state = State::new(&window);
     state.run(event_loop);
 }
