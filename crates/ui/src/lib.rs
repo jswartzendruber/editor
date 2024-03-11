@@ -253,8 +253,8 @@ impl<'window> State<'window> {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.0,
-                            g: 0.05,
+                            r: 0.1,
+                            g: 0.0,
                             b: 0.0,
                             a: 1.0,
                         }),
@@ -309,6 +309,7 @@ pub fn run() {
     let event_loop = EventLoop::new().unwrap();
     let window = WindowBuilder::new()
         .with_inner_size(PhysicalSize::new(1360, 720))
+        .with_title("WGPU")
         .build(&event_loop)
         .unwrap();
     let mut state = State::new(&window);
