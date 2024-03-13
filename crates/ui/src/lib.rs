@@ -1,14 +1,13 @@
 pub mod camera;
 pub mod layout;
 pub mod mesh;
+pub mod text;
 pub mod texture;
 pub mod texture_atlas;
 
 use camera::CameraUniform;
-use mesh::{Material, Mesh, MeshInstance, MeshVertex};
-use std::borrow::Cow;
-use texture_atlas::TextureAtlas;
-use wgpu::{util::DeviceExt, Surface};
+use text::AtlasPipeline;
+use wgpu::Surface;
 use winit::{
     dpi::PhysicalSize,
     event::{ElementState, Event, KeyEvent, WindowEvent},
@@ -23,13 +22,8 @@ struct State<'window> {
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
-    render_pipeline: wgpu::RenderPipeline,
+    texture_atlas_pipeline: AtlasPipeline,
     camera_uniform: CameraUniform,
-    camera_buffer: wgpu::Buffer,
-    camera_bind_group: wgpu::BindGroup,
-
-    material: Material,
-    mesh: Mesh,
 }
 
 impl<'window> State<'window> {
@@ -59,132 +53,22 @@ impl<'window> State<'window> {
         ))
         .expect("Failed to create device");
 
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-        });
-
-        let camera_uniform =
-            CameraUniform::new_ortho(0.0, size.width as f32, size.height as f32, 0.0, 1.0, -1.0);
-        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Camera Buffer"),
-            contents: bytemuck::cast_slice(&[camera_uniform]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-        let camera_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-                label: Some("camera_bind_group_layout"),
-            });
-        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &camera_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: camera_buffer.as_entire_binding(),
-            }],
-            label: Some("camera_bind_group"),
-        });
-
-        let mut atlas = TextureAtlas::new(&device, &queue, 1024);
-        let bamboo_atlas_idx = atlas
-            .load_image_from_file(&queue, "res/bamboo.png")
-            .unwrap();
-        let tree_atlas_idx = atlas
-            .load_image_from_file(&queue, "res/happy-tree.png")
-            .unwrap();
-        let hello_atlas_idx = atlas.load_image_from_file(&queue, "res/hello.png").unwrap();
-        let rect_atlas_idx = atlas.load_image_from_file(&queue, "res/rect.png").unwrap();
-
-        let atlas_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-                label: Some("atlas texture_bind_group_layout"),
-            });
-
-        let atlas_material = Material::new(
-            "atlas".to_string(),
+        let camera_uniform = CameraUniform::new(
             &device,
-            &atlas_bind_group_layout,
-            atlas.texture(),
+            0.0,
+            size.width as f32,
+            size.height as f32,
+            0.0,
+            1.0,
+            -1.0,
         );
 
-        let mut atlas_mesh = Mesh::new(&device, "Atlas mesh".to_string(), atlas);
-
-        atlas_mesh.add_instance(
-            bamboo_atlas_idx,
-            [0.0, 0.0],
-            [300.0, 300.0],
-            [1.0, 1.0, 1.0, 1.0],
+        let texture_atlas_pipeline = AtlasPipeline::new(
+            &device,
+            &queue,
+            camera_uniform.bind_group().clone(),
+            camera_uniform.bind_group_layout().clone(),
         );
-        atlas_mesh.add_instance(
-            tree_atlas_idx,
-            [300.0, 300.0],
-            [300.0, 300.0],
-            [1.0, 1.0, 1.0, 1.0],
-        );
-        atlas_mesh.add_instance(
-            hello_atlas_idx,
-            [0.0, 300.0],
-            [300.0, 300.0],
-            [1.0, 1.0, 1.0, 1.0],
-        );
-        atlas_mesh.add_instance(
-            rect_atlas_idx,
-            [300.0, 150.0],
-            [300.0, 150.0],
-            [1.0, 1.0, 1.0, 1.0],
-        );
-
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[&camera_bind_group_layout, &atlas_bind_group_layout],
-            push_constant_ranges: &[],
-        });
-
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: None,
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: "vs_main",
-                buffers: &[MeshVertex::desc(), MeshInstance::desc()],
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: "fs_main",
-                targets: &[Some(wgpu::TextureFormat::Bgra8UnormSrgb.into())],
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-        });
 
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -204,34 +88,34 @@ impl<'window> State<'window> {
             device,
             queue,
             config,
-            render_pipeline,
+            texture_atlas_pipeline,
             camera_uniform,
-            camera_buffer,
-            camera_bind_group,
-
-            mesh: atlas_mesh,
-            material: atlas_material,
         }
     }
 
     fn resize(&mut self, new_size: &PhysicalSize<u32>) {
         let width = new_size.width.max(1);
         let height = new_size.height.max(1);
+
         self.config.width = width;
         self.config.height = height;
-        self.camera_uniform =
-            CameraUniform::new_ortho(0.0, width as f32, height as f32, 0.0, 1.0, -1.0);
-        self.queue.write_buffer(
-            &self.camera_buffer,
-            0,
-            bytemuck::cast_slice(&[self.camera_uniform]),
+
+        self.camera_uniform.update_matrix(
+            &self.queue,
+            0.0,
+            width as f32,
+            height as f32,
+            0.0,
+            1.0,
+            -1.0,
         );
+
         self.surface.configure(&self.device, &self.config);
         self.window.request_redraw();
     }
 
     fn update(&mut self) {
-        self.mesh.update(&self.queue);
+        self.texture_atlas_pipeline.update(&self.queue);
     }
 
     fn draw(&mut self) {
@@ -265,9 +149,8 @@ impl<'window> State<'window> {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
-            rpass.set_pipeline(&self.render_pipeline);
-            rpass.set_bind_group(0, &self.camera_bind_group, &[]);
-            self.mesh.draw(&mut rpass, &self.material);
+
+            self.texture_atlas_pipeline.draw(&mut rpass);
         }
 
         self.queue.submit(Some(encoder.finish()));
