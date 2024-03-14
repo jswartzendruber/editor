@@ -1,11 +1,15 @@
 pub mod camera;
 pub mod layout;
 pub mod mesh;
+pub mod pipeline;
 pub mod text;
 pub mod texture;
 pub mod texture_atlas;
 
+use std::borrow::Cow;
+
 use camera::CameraUniform;
+use pipeline::{CameraRaw, PMesh, Pipeline, Uniform, Uniformable};
 use text::AtlasPipeline;
 use wgpu::Surface;
 use winit::{
@@ -16,14 +20,20 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
+use crate::{
+    mesh::MeshInstance,
+    pipeline::{Meshable, PMeshInstace},
+};
+
 struct State<'window> {
     window: &'window Window,
     surface: wgpu::Surface<'window>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
-    texture_atlas_pipeline: AtlasPipeline,
-    camera_uniform: CameraUniform,
+    // texture_atlas_pipeline: AtlasPipeline,
+    // camera_uniform: CameraUniform,
+    test_pipeline: Pipeline,
 }
 
 impl<'window> State<'window> {
@@ -53,22 +63,22 @@ impl<'window> State<'window> {
         ))
         .expect("Failed to create device");
 
-        let camera_uniform = CameraUniform::new(
-            &device,
-            0.0,
-            size.width as f32,
-            size.height as f32,
-            0.0,
-            1.0,
-            -1.0,
-        );
+        // let camera_uniform = CameraUniform::new(
+        //     &device,
+        //     0.0,
+        //     size.width as f32,
+        //     size.height as f32,
+        //     0.0,
+        //     1.0,
+        //     -1.0,
+        // );
 
-        let texture_atlas_pipeline = AtlasPipeline::new(
-            &device,
-            &queue,
-            camera_uniform.bind_group().clone(),
-            camera_uniform.bind_group_layout().clone(),
-        );
+        // let texture_atlas_pipeline = AtlasPipeline::new(
+        //     &device,
+        //     &queue,
+        //     camera_uniform.bind_group().clone(),
+        //     camera_uniform.bind_group_layout().clone(),
+        // );
 
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -82,14 +92,53 @@ impl<'window> State<'window> {
         };
         surface.configure(&device, &config);
 
+        let camera_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                label: Some("camera_bind_group_layout"),
+            });
+
+        let size = (1360.0, 720.0);
+        let camera_uniform_test = Uniform::new(
+            &device,
+            camera_bind_group_layout,
+            CameraRaw::new_ortho(0.0, size.0 as f32, size.1 as f32, 0.0, 1.0, -1.0),
+            0,
+        );
+        let uniforms = vec![Box::new(camera_uniform_test) as Box<dyn Uniformable>];
+
+        let mesh_instances = vec![PMeshInstace {
+            position: [0.0, 0.0],
+            size: [300.0, 300.0],
+            color: [1.0, 0.0, 0.0, 1.0],
+        }];
+        let mesh_test = PMesh::new(&device, mesh_instances, PMeshInstace::desc());
+        let meshes = vec![Box::new(mesh_test) as Box<dyn Meshable>];
+        let test_pipeline = Pipeline::new(
+            &device,
+            Cow::Borrowed(include_str!("rect.wgsl")),
+            uniforms,
+            meshes,
+        );
+
         Self {
             window,
             surface,
             device,
             queue,
             config,
-            texture_atlas_pipeline,
-            camera_uniform,
+            // texture_atlas_pipeline,
+            // camera_uniform,
+            test_pipeline,
         }
     }
 
@@ -100,22 +149,23 @@ impl<'window> State<'window> {
         self.config.width = width;
         self.config.height = height;
 
-        self.camera_uniform.update_matrix(
-            &self.queue,
-            0.0,
-            width as f32,
-            height as f32,
-            0.0,
-            1.0,
-            -1.0,
-        );
+        // self.camera_uniform.update_matrix(
+        //     &self.queue,
+        //     0.0,
+        //     width as f32,
+        //     height as f32,
+        //     0.0,
+        //     1.0,
+        //     -1.0,
+        // );
 
         self.surface.configure(&self.device, &self.config);
         self.window.request_redraw();
     }
 
     fn update(&mut self) {
-        self.texture_atlas_pipeline.update(&self.queue);
+        // self.texture_atlas_pipeline.update(&self.queue);
+        self.test_pipeline.update(&self.queue);
     }
 
     fn draw(&mut self) {
@@ -150,7 +200,8 @@ impl<'window> State<'window> {
                 occlusion_query_set: None,
             });
 
-            self.texture_atlas_pipeline.draw(&mut rpass);
+            // self.texture_atlas_pipeline.draw(&mut rpass);
+            self.test_pipeline.draw(&mut rpass);
         }
 
         self.queue.submit(Some(encoder.finish()));

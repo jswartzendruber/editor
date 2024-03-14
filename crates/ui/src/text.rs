@@ -91,30 +91,30 @@ impl AtlasPipeline {
 
         let mut mesh = Mesh::new(&device, "Atlas mesh".to_string(), atlas);
 
-        mesh.add_instance(
-            bamboo_atlas_idx,
-            [0.0, 0.0],
-            [300.0, 300.0],
-            [1.0, 1.0, 1.0, 1.0],
-        );
-        mesh.add_instance(
-            tree_atlas_idx,
-            [300.0, 300.0],
-            [300.0, 300.0],
-            [1.0, 1.0, 1.0, 1.0],
-        );
-        mesh.add_instance(
-            hello_atlas_idx,
-            [0.0, 300.0],
-            [300.0, 300.0],
-            [1.0, 1.0, 1.0, 1.0],
-        );
-        mesh.add_instance(
-            rect_atlas_idx,
-            [300.0, 150.0],
-            [300.0, 150.0],
-            [1.0, 1.0, 1.0, 1.0],
-        );
+        // mesh.add_instance(
+        //     bamboo_atlas_idx,
+        //     [0.0, 0.0],
+        //     [300.0, 300.0],
+        //     [1.0, 1.0, 1.0, 1.0],
+        // );
+        // mesh.add_instance(
+        //     tree_atlas_idx,
+        //     [300.0, 300.0],
+        //     [300.0, 300.0],
+        //     [1.0, 1.0, 1.0, 1.0],
+        // );
+        // mesh.add_instance(
+        //     hello_atlas_idx,
+        //     [0.0, 300.0],
+        //     [300.0, 300.0],
+        //     [1.0, 1.0, 1.0, 1.0],
+        // );
+        // mesh.add_instance(
+        //     rect_atlas_idx,
+        //     [300.0, 150.0],
+        //     [300.0, 150.0],
+        //     [1.0, 1.0, 1.0, 1.0],
+        // );
 
         AtlasPipeline {
             pipeline,

@@ -122,7 +122,6 @@ pub struct Mesh {
     pub instances: Vec<MeshInstance>,
     pub instance_buffer: wgpu::Buffer,
     pub atlas: TextureAtlas,
-    dirty: bool,
 }
 
 impl Mesh {
@@ -153,7 +152,6 @@ impl Mesh {
             instances: vec![],
             instance_buffer,
             atlas,
-            dirty: false,
         }
     }
 
@@ -167,7 +165,6 @@ impl Mesh {
         let atlas_size = self.atlas.size() as f32;
         let subimg_dimensions = self.atlas.get_allocation(texture_id).rectangle;
 
-        self.dirty = true;
         self.instances.push(MeshInstance {
             position,
             size,
@@ -189,7 +186,6 @@ impl Mesh {
             0,
             bytemuck::cast_slice(&self.instances),
         );
-        self.dirty = false;
     }
 
     pub fn draw<'mats: 'rpass, 'mesh: 'rpass, 'rpass>(
