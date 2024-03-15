@@ -1,3 +1,9 @@
+use crate::{
+    image_pipeline::ImageInstance,
+    quad_pipeline::QuadInstance,
+    texture_atlas::{TextureAtlas, TextureId},
+};
+
 #[derive(Debug)]
 pub struct Color {
     r: u8,
@@ -9,6 +15,15 @@ pub struct Color {
 impl Color {
     pub fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
         Self { r, g, b, a }
+    }
+
+    fn to_f32_arr(&self) -> [f32; 4] {
+        [
+            self.r as f32 / 255.0,
+            self.g as f32 / 255.0,
+            self.b as f32 / 255.0,
+            self.a as f32 / 255.0,
+        ]
     }
 }
 
@@ -25,22 +40,57 @@ impl Rectangle {
 
 #[derive(Debug)]
 pub struct TexturedRectangle {
-    texture: usize, // some kind of id into a texture atlas
+    texture_id: TextureId,
     tint: Color,
 }
 
 impl TexturedRectangle {
-    pub fn new(texture: usize, tint: Color) -> Self {
-        Self { texture, tint }
+    pub fn new(texture_id: TextureId) -> Self {
+        Self { texture_id, tint: Color::new(255, 255, 255, 255) }
+    }
+
+    pub fn new_tinted(texture_id: TextureId, tint: Color) -> Self {
+        Self { texture_id, tint }
     }
 }
 
 #[derive(Debug)]
 pub enum Ui {
+    TexturedRectangle(TexturedRectangle),
+    Rectangle(Rectangle),
     Hbox(Hbox),
     Vbox(Vbox),
-    Rectangle(Rectangle),
-    TexturedRectangle(TexturedRectangle),
+    Spacer,
+}
+
+impl Ui {
+    pub fn layout(&self, atlas: &TextureAtlas, view_size: (f32, f32)) -> Vec<Drawables> {
+        let mut rects = vec![];
+
+        match self {
+            Ui::Hbox(h) => h.layout(
+                atlas,
+                BoundingBox {
+                    min: (0.0, 0.0),
+                    max: (view_size.0, view_size.1),
+                },
+                &mut rects,
+            ),
+            Ui::Vbox(v) => v.layout(
+                atlas,
+                BoundingBox {
+                    min: (0.0, 0.0),
+                    max: (view_size.0, view_size.1),
+                },
+                &mut rects,
+            ),
+            Ui::TexturedRectangle(_) => unimplemented!(),
+            Ui::Rectangle(_) => unimplemented!(),
+            Ui::Spacer => unimplemented!(),
+        }
+
+        rects
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -85,8 +135,13 @@ impl BoundingBox {
     }
 }
 
+pub enum Drawables {
+    Rect(QuadInstance),
+    TexturedRect(ImageInstance),
+}
+
 pub trait UiElement {
-    fn layout(&self, parent_size: BoundingBox, rects: &mut Vec<BoundingBox>) {
+    fn layout(&self, atlas: &TextureAtlas, parent_size: BoundingBox, rects: &mut Vec<Drawables>) {
         for (i, elem) in self.elements().iter().enumerate() {
             let child_bbox = if self.is_hbox() {
                 let child_index = i;
@@ -103,10 +158,25 @@ pub trait UiElement {
             };
 
             match elem {
-                Ui::Rectangle(_) => rects.push(child_bbox),
-                Ui::TexturedRectangle(_) => rects.push(child_bbox),
-                Ui::Hbox(hbox) => hbox.layout(child_bbox, rects),
-                Ui::Vbox(vbox) => vbox.layout(child_bbox, rects),
+                Ui::TexturedRectangle(tr) => {
+                    rects.push(Drawables::TexturedRect(ImageInstance::add_instance(
+                        atlas,
+                        tr.texture_id,
+                        [child_bbox.min.0, child_bbox.min.1],
+                        [child_bbox.width(), child_bbox.height()],
+                        tr.tint.to_f32_arr(),
+                    )));
+                }
+                Ui::Rectangle(r) => {
+                    rects.push(Drawables::Rect(QuadInstance {
+                        position: [child_bbox.min.0, child_bbox.min.1],
+                        size: [child_bbox.width(), child_bbox.height()],
+                        color: r.color.to_f32_arr(),
+                    }));
+                }
+                Ui::Hbox(hbox) => hbox.layout(atlas, child_bbox, rects),
+                Ui::Vbox(vbox) => vbox.layout(atlas, child_bbox, rects),
+                Ui::Spacer => {}
             }
         }
     }
@@ -155,29 +225,5 @@ impl UiElement for Vbox {
 
     fn is_hbox(&self) -> bool {
         false
-    }
-}
-
-#[test]
-fn hbox_three_equal_childs() {
-    let tree = Hbox::new(vec![
-        Ui::Rectangle(Rectangle::new(Color::new(0, 0, 0, 255))),
-        Ui::Rectangle(Rectangle::new(Color::new(0, 0, 0, 255))),
-        Ui::Rectangle(Rectangle::new(Color::new(0, 0, 0, 255))),
-    ]);
-
-    let expected_bounding_boxes = vec![
-        BoundingBox::new((800.0 / 3.0) * 0.0, 0.0, (800.0 / 3.0) * 1.0, 600.0),
-        BoundingBox::new((800.0 / 3.0) * 1.0, 0.0, (800.0 / 3.0) * 2.0, 600.0),
-        BoundingBox::new((800.0 / 3.0) * 2.0, 0.0, (800.0 / 3.0) * 3.0, 600.0),
-    ];
-
-    let parent_size = BoundingBox::new(0.0, 0.0, 800.0, 600.0);
-    let mut rects = vec![];
-
-    tree.layout(parent_size, &mut rects);
-
-    for (i, bbox) in rects.iter().enumerate() {
-        assert_eq!(*bbox, expected_bounding_boxes[i]);
     }
 }

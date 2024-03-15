@@ -1,15 +1,16 @@
 pub mod camera_uniform;
 pub mod image_pipeline;
 pub mod layout;
-pub mod pipeline;
 pub mod quad_pipeline;
 pub mod texture;
 pub mod texture_atlas;
 
 use camera_uniform::CameraUniform;
 use image_pipeline::ImagePipeline;
+use layout::{Color, Hbox, Rectangle, TexturedRectangle, Ui, Vbox};
 use quad_pipeline::QuadPipeline;
 use std::{cell::RefCell, rc::Rc};
+use texture_atlas::TextureAtlas;
 use wgpu::Surface;
 use winit::{
     dpi::PhysicalSize,
@@ -27,9 +28,12 @@ struct State<'window> {
     config: wgpu::SurfaceConfiguration,
 
     camera_uniform: Rc<RefCell<CameraUniform>>,
+    atlas: TextureAtlas,
 
     quad_pipeline: QuadPipeline,
     image_pipeline: ImagePipeline,
+
+    layout_tree: Ui,
 }
 
 impl<'window> State<'window> {
@@ -78,8 +82,32 @@ impl<'window> State<'window> {
             0,
         )));
 
+        let mut atlas = TextureAtlas::new(&device, &queue, 1024);
+        let bamboo_atlas_idx = atlas
+            .load_image_from_file(&queue, "res/bamboo.png")
+            .unwrap();
+        let tree_atlas_idx = atlas
+            .load_image_from_file(&queue, "res/happy-tree.png")
+            .unwrap();
+        let hello_atlas_idx = atlas.load_image_from_file(&queue, "res/hello.png").unwrap();
+        let rect_atlas_idx = atlas.load_image_from_file(&queue, "res/rect.png").unwrap();
+
         let quad_pipeline = QuadPipeline::new(&device, camera_uniform.clone());
-        let image_pipeline = ImagePipeline::new(&device, &queue, camera_uniform.clone());
+        let image_pipeline = ImagePipeline::new(&device, camera_uniform.clone(), &atlas);
+
+        let layout_tree = Ui::Hbox(Hbox::new(vec![
+            Ui::Vbox(Vbox::new(vec![
+                Ui::TexturedRectangle(TexturedRectangle::new(bamboo_atlas_idx)),
+                Ui::Rectangle(Rectangle::new(Color::new(0, 255, 0, 255))),
+                Ui::TexturedRectangle(TexturedRectangle::new(tree_atlas_idx)),
+            ])),
+            Ui::Rectangle(Rectangle::new(Color::new(255, 0, 0, 255))),
+            Ui::Vbox(Vbox::new(vec![
+                Ui::TexturedRectangle(TexturedRectangle::new(hello_atlas_idx)),
+                Ui::Rectangle(Rectangle::new(Color::new(0, 255, 0, 255))),
+                Ui::TexturedRectangle(TexturedRectangle::new(rect_atlas_idx)),
+            ])),
+        ]));
 
         Self {
             window,
@@ -89,9 +117,12 @@ impl<'window> State<'window> {
             config,
 
             camera_uniform,
+            atlas,
 
             quad_pipeline,
             image_pipeline,
+
+            layout_tree,
         }
     }
 
@@ -111,6 +142,24 @@ impl<'window> State<'window> {
     }
 
     fn update(&mut self) {
+        let instances = self.layout_tree.layout(
+            &self.atlas,
+            (self.config.width as f32, self.config.height as f32),
+        );
+
+        let quad_instances = self.quad_pipeline.instances();
+        let image_instances = self.image_pipeline.instances();
+
+        quad_instances.clear();
+        image_instances.clear();
+
+        for instance in instances {
+            match instance {
+                layout::Drawables::Rect(qi) => quad_instances.push(qi),
+                layout::Drawables::TexturedRect(ii) => image_instances.push(ii),
+            }
+        }
+
         self.quad_pipeline.update(&self.queue);
         self.image_pipeline.update(&self.queue);
     }
@@ -135,7 +184,7 @@ impl<'window> State<'window> {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
+                            r: 0.0,
                             g: 0.0,
                             b: 0.0,
                             a: 1.0,

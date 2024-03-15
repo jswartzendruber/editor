@@ -124,24 +124,14 @@ pub struct ImagePipeline {
     index_buffer: wgpu::Buffer,
     instance_buffer: wgpu::Buffer,
     instances: Vec<ImageInstance>,
-
-    atlas: TextureAtlas,
 }
 
 impl ImagePipeline {
     pub fn new(
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
         camera_uniform: Rc<RefCell<CameraUniform>>,
+        atlas: &TextureAtlas,
     ) -> Self {
-        let mut atlas = TextureAtlas::new(device, queue, 1024);
-        let bamboo_atlas_idx = atlas.load_image_from_file(queue, "res/bamboo.png").unwrap();
-        let tree_atlas_idx = atlas
-            .load_image_from_file(queue, "res/happy-tree.png")
-            .unwrap();
-        let hello_atlas_idx = atlas.load_image_from_file(queue, "res/hello.png").unwrap();
-        let rect_atlas_idx = atlas.load_image_from_file(queue, "res/rect.png").unwrap();
-
         let atlas_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
@@ -200,22 +190,7 @@ impl ImagePipeline {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-        let instances = vec![
-            ImageInstance::add_instance(
-                &atlas,
-                bamboo_atlas_idx,
-                [300.0, 0.0],
-                [300.0, 300.0],
-                [1.0, 1.0, 1.0, 1.0],
-            ),
-            ImageInstance::add_instance(
-                &atlas,
-                tree_atlas_idx,
-                [300.0, 300.0],
-                [300.0, 300.0],
-                [1.0, 1.0, 1.0, 1.0],
-            ),
-        ];
+        let instances = vec![];
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
@@ -260,9 +235,11 @@ impl ImagePipeline {
             index_buffer,
 
             instances,
-
-            atlas,
         }
+    }
+
+    pub fn instances(&mut self) -> &mut Vec<ImageInstance> {
+        &mut self.instances
     }
 
     pub fn update(&mut self, queue: &wgpu::Queue) {

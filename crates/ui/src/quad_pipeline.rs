@@ -4,13 +4,13 @@ use wgpu::util::DeviceExt;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct QuadInstace {
+pub struct QuadInstance {
     pub position: [f32; 2],
     pub size: [f32; 2],
     pub color: [f32; 4],
 }
 
-impl QuadInstace {
+impl QuadInstance {
     const ATTRIBS: [wgpu::VertexAttribute; 3] = wgpu::vertex_attr_array![
         5 => Float32x2,
         6 => Float32x2,
@@ -19,7 +19,7 @@ impl QuadInstace {
 
     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<QuadInstace>() as wgpu::BufferAddress,
+            array_stride: std::mem::size_of::<QuadInstance>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Instance,
             attributes: &Self::ATTRIBS,
         }
@@ -62,7 +62,7 @@ pub struct QuadPipeline {
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     instance_buffer: wgpu::Buffer,
-    instances: Vec<QuadInstace>,
+    instances: Vec<QuadInstance>,
 }
 
 impl QuadPipeline {
@@ -70,7 +70,7 @@ impl QuadPipeline {
         let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Instance Buffer"),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            size: (std::mem::size_of::<QuadInstace>() * 1024) as u64,
+            size: (std::mem::size_of::<QuadInstance>() * 1024) as u64,
             mapped_at_creation: false,
         });
 
@@ -86,7 +86,7 @@ impl QuadPipeline {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-        let instances = vec![QuadInstace {
+        let instances = vec![QuadInstance {
             position: [0.0, 0.0],
             size: [300.0, 300.0],
             color: [1.0, 0.0, 0.0, 1.0],
@@ -109,7 +109,7 @@ impl QuadPipeline {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
-                buffers: &[QuadVertex::desc(), QuadInstace::desc()],
+                buffers: &[QuadVertex::desc(), QuadInstance::desc()],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
@@ -153,5 +153,9 @@ impl QuadPipeline {
             0,
             0..self.instances.len() as u32,
         );
+    }
+
+    pub fn instances(&mut self) -> &mut Vec<QuadInstance> {
+        &mut self.instances
     }
 }
