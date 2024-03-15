@@ -1,30 +1,6 @@
-use std::borrow::Cow;
+use crate::camera_uniform::CameraUniform;
+use std::{borrow::Cow, rc::Rc};
 use wgpu::util::DeviceExt;
-
-/// The projection matrix used in the shaders.
-#[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct CameraRaw {
-    projection: [[f32; 4]; 4],
-}
-
-impl CameraRaw {
-    pub fn new_ortho(left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> Self {
-        CameraRaw {
-            projection: [
-                [2.0 / (right - left), 0.0, 0.0, 0.0],
-                [0.0, 2.0 / (top - bottom), 0.0, 0.0],
-                [0.0, 0.0, 1.0 / (near - far), 0.0],
-                [
-                    (right + left) / (left - right),
-                    (top + bottom) / (bottom - top),
-                    near / (near - far),
-                    1.0,
-                ],
-            ],
-        }
-    }
-}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -83,9 +59,7 @@ impl QuadVertex {
 pub struct QuadPipeline {
     pipeline: wgpu::RenderPipeline,
 
-    camera_raw: CameraRaw,
-    camera_buffer: wgpu::Buffer,
-    camera_bind_group: wgpu::BindGroup,
+    camera_uniform: Rc<CameraUniform>,
 
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
@@ -94,41 +68,7 @@ pub struct QuadPipeline {
 }
 
 impl QuadPipeline {
-    pub fn new(device: &wgpu::Device) -> Self {
-        let size = (1360.0, 720.0);
-
-        let camera_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-                label: Some("camera_bind_group_layout"),
-            });
-
-        let camera_raw = CameraRaw::new_ortho(0.0, size.0, size.1, 0.0, 1.0, -1.0);
-
-        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Camera Buffer"),
-            contents: bytemuck::cast_slice(&[camera_raw]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &camera_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: camera_buffer.as_entire_binding(),
-            }],
-            label: Some("uniform bind group"),
-        });
-
+    pub fn new(device: &wgpu::Device, camera_uniform: Rc<CameraUniform>) -> Self {
         let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Instance Buffer"),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
@@ -156,7 +96,7 @@ impl QuadPipeline {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[&camera_bind_group_layout],
+            bind_group_layouts: &[camera_uniform.bind_group_layout()],
             push_constant_ranges: &[],
         });
 
@@ -187,24 +127,16 @@ impl QuadPipeline {
         Self {
             pipeline,
 
-            camera_raw,
-            camera_buffer,
-            camera_bind_group,
+            camera_uniform,
 
             vertex_buffer,
             instance_buffer,
             index_buffer,
-
             instances,
         }
     }
 
     pub fn update(&mut self, queue: &wgpu::Queue) {
-        queue.write_buffer(
-            &self.camera_buffer,
-            0,
-            bytemuck::cast_slice(&[self.camera_raw]),
-        );
         queue.write_buffer(
             &self.instance_buffer,
             0,
@@ -215,7 +147,11 @@ impl QuadPipeline {
     pub fn draw<'rp, 'rpb, 's: 'rp>(&'s self, rpass: &'rpb mut wgpu::RenderPass<'rp>) {
         rpass.set_pipeline(&self.pipeline);
 
-        rpass.set_bind_group(0, &self.camera_bind_group, &[]);
+        rpass.set_bind_group(
+            self.camera_uniform.index(),
+            self.camera_uniform.bind_group(),
+            &[],
+        );
 
         rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         rpass.set_vertex_buffer(1, self.instance_buffer.slice(..));

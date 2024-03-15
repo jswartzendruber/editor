@@ -1,5 +1,8 @@
-use crate::texture_atlas::{TextureAtlas, TextureId};
-use std::borrow::Cow;
+use crate::{
+    camera_uniform::CameraUniform,
+    texture_atlas::{TextureAtlas, TextureId},
+};
+use std::{borrow::Cow, rc::Rc};
 use wgpu::util::DeviceExt;
 
 /// The projection matrix used in the shaders.
@@ -115,10 +118,7 @@ impl ImageVertex {
 pub struct ImagePipeline {
     pipeline: wgpu::RenderPipeline,
 
-    camera_raw: CameraRaw,
-    camera_buffer: wgpu::Buffer,
-    camera_bind_group: wgpu::BindGroup,
-
+    camera_uniform: Rc<CameraUniform>,
     atlas_bind_group: wgpu::BindGroup,
 
     vertex_buffer: wgpu::Buffer,
@@ -127,52 +127,16 @@ pub struct ImagePipeline {
     instances: Vec<ImageInstance>,
 
     atlas: TextureAtlas,
-    bamboo_atlas_idx: TextureId,
-    tree_atlas_idx: TextureId,
-    hello_atlas_idx: TextureId,
-    rect_atlas_idx: TextureId,
 }
 
 impl ImagePipeline {
-    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
-        let size = (1360.0, 720.0);
-
-        let camera_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-                label: Some("camera_bind_group_layout"),
-            });
-
-        let camera_raw = CameraRaw::new_ortho(0.0, size.0, size.1, 0.0, 1.0, -1.0);
-
-        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Camera Buffer"),
-            contents: bytemuck::cast_slice(&[camera_raw]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &camera_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: camera_buffer.as_entire_binding(),
-            }],
-            label: Some("uniform bind group"),
-        });
-
+    pub fn new(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        camera_uniform: Rc<CameraUniform>,
+    ) -> Self {
         let mut atlas = TextureAtlas::new(device, queue, 1024);
-        let bamboo_atlas_idx = atlas
-            .load_image_from_file(queue, "res/bamboo.png")
-            .unwrap();
+        let bamboo_atlas_idx = atlas.load_image_from_file(queue, "res/bamboo.png").unwrap();
         let tree_atlas_idx = atlas
             .load_image_from_file(queue, "res/happy-tree.png")
             .unwrap();
@@ -256,7 +220,7 @@ impl ImagePipeline {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[&camera_bind_group_layout, &atlas_bind_group_layout],
+            bind_group_layouts: &[camera_uniform.bind_group_layout(), &atlas_bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -287,10 +251,7 @@ impl ImagePipeline {
         Self {
             pipeline,
 
-            camera_raw,
-            camera_buffer,
-            camera_bind_group,
-
+            camera_uniform,
             atlas_bind_group,
 
             vertex_buffer,
@@ -300,19 +261,10 @@ impl ImagePipeline {
             instances,
 
             atlas,
-            bamboo_atlas_idx,
-            tree_atlas_idx,
-            hello_atlas_idx,
-            rect_atlas_idx,
         }
     }
 
     pub fn update(&mut self, queue: &wgpu::Queue) {
-        queue.write_buffer(
-            &self.camera_buffer,
-            0,
-            bytemuck::cast_slice(&[self.camera_raw]),
-        );
         queue.write_buffer(
             &self.instance_buffer,
             0,
@@ -323,7 +275,11 @@ impl ImagePipeline {
     pub fn draw<'rp, 'rpb, 's: 'rp>(&'s self, rpass: &'rpb mut wgpu::RenderPass<'rp>) {
         rpass.set_pipeline(&self.pipeline);
 
-        rpass.set_bind_group(0, &self.camera_bind_group, &[]);
+        rpass.set_bind_group(
+            self.camera_uniform.index(),
+            self.camera_uniform.bind_group(),
+            &[],
+        );
         rpass.set_bind_group(1, &self.atlas_bind_group, &[]);
 
         rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));

@@ -1,4 +1,4 @@
-pub mod camera;
+pub mod camera_uniform;
 pub mod image_pipeline;
 pub mod layout;
 pub mod pipeline;
@@ -6,6 +6,9 @@ pub mod quad_pipeline;
 pub mod texture;
 pub mod texture_atlas;
 
+use std::rc::Rc;
+
+use camera_uniform::CameraUniform;
 use image_pipeline::ImagePipeline;
 use quad_pipeline::QuadPipeline;
 use wgpu::Surface;
@@ -67,8 +70,15 @@ impl<'window> State<'window> {
         };
         surface.configure(&device, &config);
 
-        let quad_pipeline = QuadPipeline::new(&device);
-        let image_pipeline = ImagePipeline::new(&device, &queue);
+        let camera_uniform = Rc::new(CameraUniform::new(
+            &device,
+            size.width as f32,
+            size.height as f32,
+            0,
+        ));
+
+        let quad_pipeline = QuadPipeline::new(&device, camera_uniform.clone());
+        let image_pipeline = ImagePipeline::new(&device, &queue, camera_uniform.clone());
 
         Self {
             window,
