@@ -2,7 +2,7 @@ use crate::{
     camera_uniform::CameraUniform,
     texture_atlas::{TextureAtlas, TextureId},
 };
-use std::{borrow::Cow, rc::Rc};
+use std::{borrow::Cow, cell::RefCell, rc::Rc};
 use wgpu::util::DeviceExt;
 
 /// The projection matrix used in the shaders.
@@ -118,7 +118,6 @@ impl ImageVertex {
 pub struct ImagePipeline {
     pipeline: wgpu::RenderPipeline,
 
-    camera_uniform: Rc<CameraUniform>,
     atlas_bind_group: wgpu::BindGroup,
 
     vertex_buffer: wgpu::Buffer,
@@ -133,7 +132,7 @@ impl ImagePipeline {
     pub fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        camera_uniform: Rc<CameraUniform>,
+        camera_uniform: Rc<RefCell<CameraUniform>>,
     ) -> Self {
         let mut atlas = TextureAtlas::new(device, queue, 1024);
         let bamboo_atlas_idx = atlas.load_image_from_file(queue, "res/bamboo.png").unwrap();
@@ -220,7 +219,10 @@ impl ImagePipeline {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[camera_uniform.bind_group_layout(), &atlas_bind_group_layout],
+            bind_group_layouts: &[
+                camera_uniform.borrow().bind_group_layout(),
+                &atlas_bind_group_layout,
+            ],
             push_constant_ranges: &[],
         });
 
@@ -251,7 +253,6 @@ impl ImagePipeline {
         Self {
             pipeline,
 
-            camera_uniform,
             atlas_bind_group,
 
             vertex_buffer,
@@ -272,14 +273,10 @@ impl ImagePipeline {
         );
     }
 
-    pub fn draw<'rp, 'rpb, 's: 'rp>(&'s self, rpass: &'rpb mut wgpu::RenderPass<'rp>) {
+    pub fn draw<'a>(&'a self, rpass: &mut wgpu::RenderPass<'a>, camera_uniform: &'a CameraUniform) {
         rpass.set_pipeline(&self.pipeline);
 
-        rpass.set_bind_group(
-            self.camera_uniform.index(),
-            self.camera_uniform.bind_group(),
-            &[],
-        );
+        rpass.set_bind_group(camera_uniform.index(), camera_uniform.bind_group(), &[]);
         rpass.set_bind_group(1, &self.atlas_bind_group, &[]);
 
         rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));

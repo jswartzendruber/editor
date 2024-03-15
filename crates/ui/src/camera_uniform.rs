@@ -53,12 +53,9 @@ impl CameraUniform {
         }
     }
 
-    pub fn update(&mut self, queue: &wgpu::Queue) {
-        queue.write_buffer(
-            &self.buffer,
-            0,
-            bytemuck::cast_slice(&[self.raw]),
-        );
+    pub fn update_size(&mut self, queue: &wgpu::Queue, width: f32, height: f32) {
+        self.raw = CameraRaw::new_ortho(0.0, width, height, 0.0, 1.0, -1.0);
+        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[self.raw]));
     }
 
     pub fn index(&self) -> u32 {

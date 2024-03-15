@@ -6,11 +6,10 @@ pub mod quad_pipeline;
 pub mod texture;
 pub mod texture_atlas;
 
-use std::rc::Rc;
-
 use camera_uniform::CameraUniform;
 use image_pipeline::ImagePipeline;
 use quad_pipeline::QuadPipeline;
+use std::{cell::RefCell, rc::Rc};
 use wgpu::Surface;
 use winit::{
     dpi::PhysicalSize,
@@ -26,6 +25,8 @@ struct State<'window> {
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
+
+    camera_uniform: Rc<RefCell<CameraUniform>>,
 
     quad_pipeline: QuadPipeline,
     image_pipeline: ImagePipeline,
@@ -70,12 +71,12 @@ impl<'window> State<'window> {
         };
         surface.configure(&device, &config);
 
-        let camera_uniform = Rc::new(CameraUniform::new(
+        let camera_uniform = Rc::new(RefCell::new(CameraUniform::new(
             &device,
             size.width as f32,
             size.height as f32,
             0,
-        ));
+        )));
 
         let quad_pipeline = QuadPipeline::new(&device, camera_uniform.clone());
         let image_pipeline = ImagePipeline::new(&device, &queue, camera_uniform.clone());
@@ -86,6 +87,8 @@ impl<'window> State<'window> {
             device,
             queue,
             config,
+
+            camera_uniform,
 
             quad_pipeline,
             image_pipeline,
@@ -98,6 +101,10 @@ impl<'window> State<'window> {
 
         self.config.width = width;
         self.config.height = height;
+
+        self.camera_uniform
+            .borrow_mut()
+            .update_size(&self.queue, width as f32, height as f32);
 
         self.surface.configure(&self.device, &self.config);
         self.window.request_redraw();
@@ -119,6 +126,7 @@ impl<'window> State<'window> {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let camera_uniform = &self.camera_uniform.borrow();
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
@@ -140,8 +148,8 @@ impl<'window> State<'window> {
                 occlusion_query_set: None,
             });
 
-            self.quad_pipeline.draw(&mut rpass);
-            self.image_pipeline.draw(&mut rpass);
+            self.quad_pipeline.draw(&mut rpass, camera_uniform);
+            self.image_pipeline.draw(&mut rpass, camera_uniform);
         }
 
         self.queue.submit(Some(encoder.finish()));

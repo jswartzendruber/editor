@@ -1,5 +1,5 @@
 use crate::camera_uniform::CameraUniform;
-use std::{borrow::Cow, rc::Rc};
+use std::{borrow::Cow, cell::RefCell, rc::Rc};
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
@@ -59,7 +59,7 @@ impl QuadVertex {
 pub struct QuadPipeline {
     pipeline: wgpu::RenderPipeline,
 
-    camera_uniform: Rc<CameraUniform>,
+    camera_uniform: Rc<RefCell<CameraUniform>>,
 
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
@@ -68,7 +68,7 @@ pub struct QuadPipeline {
 }
 
 impl QuadPipeline {
-    pub fn new(device: &wgpu::Device, camera_uniform: Rc<CameraUniform>) -> Self {
+    pub fn new(device: &wgpu::Device, camera_uniform: Rc<RefCell<CameraUniform>>) -> Self {
         let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Instance Buffer"),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
@@ -96,7 +96,7 @@ impl QuadPipeline {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[camera_uniform.bind_group_layout()],
+            bind_group_layouts: &[camera_uniform.borrow().bind_group_layout()],
             push_constant_ranges: &[],
         });
 
@@ -144,14 +144,10 @@ impl QuadPipeline {
         );
     }
 
-    pub fn draw<'rp, 'rpb, 's: 'rp>(&'s self, rpass: &'rpb mut wgpu::RenderPass<'rp>) {
+    pub fn draw<'a>(&'a self, rpass: &mut wgpu::RenderPass<'a>, camera_uniform: &'a CameraUniform) {
         rpass.set_pipeline(&self.pipeline);
 
-        rpass.set_bind_group(
-            self.camera_uniform.index(),
-            self.camera_uniform.bind_group(),
-            &[],
-        );
+        rpass.set_bind_group(camera_uniform.index(), camera_uniform.bind_group(), &[]);
 
         rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         rpass.set_vertex_buffer(1, self.instance_buffer.slice(..));
