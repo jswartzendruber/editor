@@ -59,8 +59,6 @@ impl QuadVertex {
 pub struct QuadPipeline {
     pipeline: wgpu::RenderPipeline,
 
-    camera_uniform: Rc<RefCell<CameraUniform>>,
-
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     instance_buffer: wgpu::Buffer,
@@ -126,8 +124,6 @@ impl QuadPipeline {
 
         Self {
             pipeline,
-
-            camera_uniform,
 
             vertex_buffer,
             instance_buffer,
