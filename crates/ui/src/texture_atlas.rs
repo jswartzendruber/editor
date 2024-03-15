@@ -16,6 +16,7 @@ pub enum AllocationError {
     AtlasFull,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct TextureId(usize);
 
 pub struct TextureAtlas {
