@@ -1,6 +1,6 @@
 use crate::{
     camera_uniform::CameraUniform,
-    layout::{BoundingBox, Drawables},
+    layout::{BoundingBox, Color, Drawables},
     texture_atlas::{TextureAtlas, TextureId},
 };
 use std::{borrow::Cow, cell::RefCell, rc::Rc};
@@ -12,6 +12,7 @@ pub fn layout_text(
     atlas: &mut TextureAtlas,
     font_size: f32,
     queue: &wgpu::Queue,
+    font_color: &Color,
 ) -> Vec<Drawables> {
     let mut drawables = vec![];
 
@@ -37,12 +38,9 @@ pub fn layout_text(
         drawables.push(Drawables::TexturedRect(ImageInstance::add_instance(
             atlas,
             glyph.texture_id,
-            [
-                baseline.0 + metrics.pos.0,
-                baseline.1 - metrics.pos.1,
-            ],
+            [baseline.0 + metrics.pos.0, baseline.1 - metrics.pos.1],
             [metrics.size.0, metrics.size.1],
-            [1.0, 1.0, 1.0, 1.0],
+            font_color.to_f32_arr(),
         )));
 
         baseline.0 += metrics.advance.0;

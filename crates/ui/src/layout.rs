@@ -18,7 +18,7 @@ impl Color {
         Self { r, g, b, a }
     }
 
-    fn to_f32_arr(&self) -> [f32; 4] {
+    pub fn to_f32_arr(&self) -> [f32; 4] {
         [
             self.r as f32 / 255.0,
             self.g as f32 / 255.0,
@@ -95,13 +95,32 @@ impl UiContainer for FixedSizedBox {
 }
 
 #[derive(Debug)]
+pub struct TextDetails {
+    text: Rc<str>,
+    font_size: f32,
+    text_color: Color,
+    background_color: Color,
+}
+
+impl TextDetails {
+    pub fn new(text: Rc<str>, font_size: f32, text_color: Color, background_color: Color) -> Self {
+        Self {
+            text,
+            font_size,
+            text_color,
+            background_color,
+        }
+    }
+}
+
+#[derive(Debug)]
 pub enum Ui {
     TexturedRectangle(TexturedRectangle),
     FixedSizedBox(FixedSizedBox),
     Rectangle(Rectangle),
+    Text(TextDetails),
     Hbox(Hbox),
     Vbox(Vbox),
-    Text(Rc<str>, f32, Color),
     Spacer,
 }
 
@@ -136,7 +155,7 @@ impl Ui {
             Ui::TexturedRectangle(_) => unimplemented!(),
             Ui::FixedSizedBox(_) => unimplemented!(),
             Ui::Rectangle(_) => unimplemented!(),
-            Ui::Text(_, _, _) => unimplemented!(),
+            Ui::Text(_) => unimplemented!(),
             Ui::Spacer => unimplemented!(),
         }
 
@@ -258,14 +277,21 @@ pub trait UiContainer {
 
                     fsb.layout(atlas, fixed_size_bbox, rects, queue)
                 }
-                Ui::Text(t, s, bc) => {
+                Ui::Text(td) => {
                     // background color
                     rects.push(Drawables::Rect(QuadInstance {
                         position: [child_bbox.min.0, child_bbox.min.1],
                         size: [child_bbox.width(), child_bbox.height()],
-                        color: bc.to_f32_arr(),
+                        color: td.background_color.to_f32_arr(),
                     }));
-                    rects.extend(image_pipeline::layout_text(child_bbox, t, atlas, *s, queue))
+                    rects.extend(image_pipeline::layout_text(
+                        child_bbox,
+                        &td.text,
+                        atlas,
+                        td.font_size,
+                        queue,
+                        &td.text_color,
+                    ))
                 }
                 Ui::Spacer => {}
             }

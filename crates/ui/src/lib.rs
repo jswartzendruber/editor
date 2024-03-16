@@ -7,7 +7,7 @@ pub mod texture_atlas;
 
 use camera_uniform::CameraUniform;
 use image_pipeline::ImagePipeline;
-use layout::{Color, FixedSizedBox, Hbox, Rectangle, TexturedRectangle, Ui, Vbox};
+use layout::{Color, FixedSizedBox, Hbox, Rectangle, TextDetails, TexturedRectangle, Ui, Vbox};
 use quad_pipeline::QuadPipeline;
 use std::{cell::RefCell, rc::Rc};
 use texture_atlas::TextureAtlas;
@@ -102,14 +102,15 @@ impl<'window> State<'window> {
                 Ui::TexturedRectangle(TexturedRectangle::new(tree_atlas_idx)),
             ])),
             Ui::FixedSizedBox(FixedSizedBox::new(
+                400.0,
                 200.0,
-                100.0,
                 Ui::Text(
-                    Rc::from(
-                        "wrapping! hello world! wrapping! the next part is cut off because it is too long!",
+                    TextDetails::new(
+                        Rc::from("wrapping! hello world! wrapping! the next part is cut off because it is too long!"),
+                        24.0,
+                        Color::new(255, 0, 0, 255),
+                        Color::new(10, 10, 10, 255),
                     ),
-                    24.0,
-                    Color::new(10, 10, 10, 255),
                 ),
                 Color::new(5, 5, 5, 255),
             )),

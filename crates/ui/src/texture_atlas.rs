@@ -142,7 +142,7 @@ impl TextureAtlas {
                 glyph
                     .bitmap()
                     .buffer()
-                    .into_iter()
+                    .iter()
                     .flat_map(|byte| [255, 255, 255, *byte])
                     .collect(),
             )
@@ -153,13 +153,10 @@ impl TextureAtlas {
                     glyph.advance().y as f32 / 64.0,
                 ),
                 size: (glyph_width, glyph_height),
-                pos: (
-                    glyph.bitmap_left() as f32,
-                    glyph.bitmap_top() as f32,
-                ),
+                pos: (glyph.bitmap_left() as f32, glyph.bitmap_top() as f32),
             };
 
-            self.load_char_from_image(&queue, &image, c, metrics, font_size)
+            self.load_char_from_image(queue, &image, c, metrics, font_size)
                 .unwrap();
             self.glyph_map.get(&c).copied()
         }
@@ -202,8 +199,8 @@ impl AtlasInternal {
         // Adjust the allocated rectangle to hide the padding
         // TODO: better way of doing this that is not lying about the size of the allocation and re-using
         // the allocation type from etagere?
-        allocation.rectangle.min.x = allocation.rectangle.min.x + 1;
-        allocation.rectangle.min.y = allocation.rectangle.min.y + 1;
+        allocation.rectangle.min.x += 1;
+        allocation.rectangle.min.y += 1;
         allocation.rectangle.max.x = allocation.rectangle.min.x + img_size.0 as i32;
         allocation.rectangle.max.y = allocation.rectangle.min.y + img_size.1 as i32;
 
