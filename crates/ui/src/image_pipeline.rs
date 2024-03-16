@@ -21,12 +21,12 @@ pub fn layout_text(
 
     for c in text.chars() {
         let glyph = atlas.map_get_or_insert_glyph(c, font_size, queue).unwrap();
+        let metrics = glyph.metrics;
 
-        let glyph_pos = (glyph.metrics.xmin as f32, glyph.metrics.ymin as f32);
-        let glyph_size = (glyph.metrics.width as f32, glyph.metrics.height as f32);
+        println!("{:?}", metrics);
 
         // Move below, to next line if we would go past the border
-        if baseline.0 - glyph_pos.1 + glyph_size.0 >= area.max.0 {
+        if baseline.0 - metrics.pos.0 + metrics.size.0 >= area.max.0 {
             baseline.1 += line_height;
             baseline.0 = area.min.0;
         }
@@ -40,14 +40,15 @@ pub fn layout_text(
             atlas,
             glyph.texture_id,
             [
-                baseline.0 - glyph_pos.1,
-                baseline.1 - glyph_size.1 - glyph_pos.1,
+                baseline.0,
+                baseline.1 - metrics.size.1 - metrics.pos.1,
             ],
-            [glyph_size.0, glyph_size.1],
+            [metrics.size.0, metrics.size.1],
             [1.0, 1.0, 1.0, 1.0],
         )));
 
-        baseline.0 += glyph.metrics.advance_width;
+        baseline.0 += metrics.advance.0;
+        baseline.1 += metrics.advance.1;
     }
 
     drawables

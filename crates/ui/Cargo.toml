@@ -12,4 +12,4 @@ wgpu = "0.19"
 winit = "0.29"
 etagere = "0.2"
 lru = "0.12"
-fontdue = { version = "0.8.0", features = [ "parallel", "rayon" ] }
+freetype-rs = "0.36"

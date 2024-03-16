@@ -743,17 +743,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fontdue"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9099a2f86b8e674b75d03ff154b3fe4c5208ed249ced8d69cc313a9fa40bb488"
-dependencies = [
- "hashbrown",
- "rayon",
- "ttf-parser",
-]
-
-[[package]]
 name = "foreign-types"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -787,6 +776,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e13624c2627564efccf4934284bdd98cbaa14e79b0b5a141218e507b3a823456"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "freetype-rs"
+version = "0.36.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5442dee36ca09604133580dc0553780e867936bb3cbef3275859e889026d2b17"
+dependencies = [
+ "bitflags 2.4.2",
+ "freetype-sys",
+ "libc",
+]
+
+[[package]]
+name = "freetype-sys"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b4dbbf4b8447b92e62282bf26760e7221f4f7ac15b9b10b3c99e4033379dbe0"
+dependencies = [
+ "cc",
+ "libc",
+ "pkg-config",
 ]
 
 [[package]]
@@ -922,7 +933,6 @@ checksum = "290f1a1d9242c78d09ce40a5e87e7554ee637af1351968159f4952f028f75604"
 dependencies = [
  "ahash",
  "allocator-api2",
- "rayon",
 ]
 
 [[package]]
@@ -2317,7 +2327,7 @@ dependencies = [
  "bytemuck",
  "env_logger",
  "etagere",
- "fontdue",
+ "freetype-rs",
  "image",
  "lru",
  "pollster",

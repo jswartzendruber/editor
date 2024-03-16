@@ -1,5 +1,6 @@
 use crate::texture::Texture;
 use etagere::{Allocation, AtlasAllocator};
+use freetype::face::LoadFlag;
 use image::{ImageError, RgbaImage};
 use std::collections::HashMap;
 
@@ -21,14 +22,21 @@ pub enum AllocationError {
 pub struct TextureId(usize);
 
 #[derive(Debug, Clone, Copy)]
+pub struct GlyphMetrics {
+    pub advance: (f32, f32),
+    pub size: (f32, f32),
+    pub pos: (f32, f32),
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct FontGlyph {
-    pub metrics: fontdue::Metrics,
+    pub metrics: GlyphMetrics,
     pub texture_id: TextureId,
     pub font_size: f32,
 }
 
 impl FontGlyph {
-    pub fn new(metrics: fontdue::Metrics, texture_id: TextureId, font_size: f32) -> Self {
+    pub fn new(metrics: GlyphMetrics, texture_id: TextureId, font_size: f32) -> Self {
         Self {
             metrics,
             texture_id,
@@ -41,20 +49,19 @@ pub struct TextureAtlas {
     atlas: AtlasInternal,
     allocations: Vec<Allocation>,
     glyph_map: HashMap<char, FontGlyph>,
-    font: fontdue::Font,
+    face: freetype::Face,
 }
 
 impl TextureAtlas {
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, size: u16) -> Self {
+        let library = freetype::Library::init().unwrap();
+        let face = library.new_face("res/RobotoMono-Regular.ttf", 0).unwrap();
+
         Self {
             atlas: AtlasInternal::new(device, queue, size),
             allocations: vec![],
             glyph_map: HashMap::new(),
-            font: fontdue::Font::from_bytes(
-                include_bytes!("../../../res/RobotoMono-Regular.ttf") as &[u8],
-                fontdue::FontSettings::default(),
-            )
-            .unwrap(),
+            face,
         }
     }
 
@@ -63,7 +70,7 @@ impl TextureAtlas {
         queue: &wgpu::Queue,
         img: &RgbaImage,
         c: char,
-        metrics: fontdue::Metrics,
+        metrics: GlyphMetrics,
         font_size: f32,
     ) -> Result<TextureId, AtlasError> {
         let texture_id = self.load_from_image(queue, img)?;
@@ -120,16 +127,35 @@ impl TextureAtlas {
         if let Some(res) = self.glyph_map.get(&c) {
             Some(*res)
         } else {
-            let (metrics, bitmap) = self.font.rasterize(c, font_size);
+            self.face
+                .set_char_size(font_size as isize * 64, 0, 0, 0)
+                .unwrap();
+            self.face.load_char(c as usize, LoadFlag::RENDER).unwrap();
+
+            let glyph = self.face.glyph();
             let image = RgbaImage::from_raw(
-                metrics.width as u32,
-                metrics.height as u32,
-                bitmap
+                glyph.bitmap().width() as u32,
+                glyph.bitmap().rows() as u32,
+                glyph
+                    .bitmap()
+                    .buffer()
                     .into_iter()
-                    .flat_map(|byte| [255, 255, 255, byte])
+                    .flat_map(|byte| [255, 255, 255, *byte])
                     .collect(),
             )
             .unwrap();
+            let metrics = GlyphMetrics {
+                advance: (
+                    (glyph.advance().x / 64) as f32,
+                    (glyph.advance().y / 64) as f32,
+                ),
+                size: (glyph.bitmap().width() as f32, glyph.bitmap().rows() as f32),
+                pos: (
+                    glyph.bitmap_left() as f32,
+                    (glyph.bitmap_top() - glyph.bitmap().rows()) as f32,
+                ),
+            };
+
             self.load_char_from_image(&queue, &image, c, metrics, font_size)
                 .unwrap();
             self.glyph_map.get(&c).copied()
