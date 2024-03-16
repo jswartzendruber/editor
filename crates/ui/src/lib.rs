@@ -104,7 +104,13 @@ impl<'window> State<'window> {
             Ui::FixedSizedBox(FixedSizedBox::new(
                 200.0,
                 100.0,
-                Ui::Text(Rc::from("hello world!"), 24.0, Color::new(5, 5, 5, 255)),
+                Ui::Text(
+                    Rc::from(
+                        "wrapping! hello world! wrapping! the next part is cut off because it is too long!",
+                    ),
+                    24.0,
+                    Color::new(10, 10, 10, 255),
+                ),
                 Color::new(5, 5, 5, 255),
             )),
             Ui::Vbox(Vbox::new(vec![

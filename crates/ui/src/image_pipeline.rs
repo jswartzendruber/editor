@@ -15,13 +15,26 @@ pub fn layout_text(
 ) -> Vec<Drawables> {
     let mut drawables = vec![];
 
+    let line_height = font_size * 1.1;
     let mut baseline = area.top_left();
-    baseline.1 += font_size * 0.75;
+    baseline.1 += line_height;
+
     for c in text.chars() {
         let glyph = atlas.map_get_or_insert_glyph(c, font_size, queue).unwrap();
 
         let glyph_pos = (glyph.metrics.xmin as f32, glyph.metrics.ymin as f32);
         let glyph_size = (glyph.metrics.width as f32, glyph.metrics.height as f32);
+
+        // Move below, to next line if we would go past the border
+        if baseline.0 - glyph_pos.1 + glyph_size.0 >= area.max.0 {
+            baseline.1 += line_height;
+            baseline.0 = area.min.0;
+        }
+
+        // Return early if we leave our box
+        if !area.inside(baseline) {
+            return drawables;
+        }
 
         drawables.push(Drawables::TexturedRect(ImageInstance::add_instance(
             atlas,
@@ -34,7 +47,7 @@ pub fn layout_text(
             [1.0, 1.0, 1.0, 1.0],
         )));
 
-        baseline.0 += glyph.metrics.advance_width.round() + glyph.subpixel_alignment.to_offset();
+        baseline.0 += glyph.metrics.advance_width;
     }
 
     drawables

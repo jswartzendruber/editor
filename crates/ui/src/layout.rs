@@ -174,7 +174,7 @@ impl BoundingBox {
     }
 
     pub fn top_left(&self) -> (f32, f32) {
-        (self.min.0, self.max.1)
+        (self.min.0, self.min.1)
     }
 
     // Returns true if pos is inside the bbox.
@@ -245,9 +245,9 @@ pub trait UiContainer {
 
                     let fixed_size_bbox = BoundingBox::new(
                         bbox_center.0 - half_width,
-                        bbox_center.1 + half_height,
-                        bbox_center.0 + half_width,
                         bbox_center.1 - half_height,
+                        bbox_center.0 + half_width,
+                        bbox_center.1 + half_height,
                     );
 
                     rects.push(Drawables::Rect(QuadInstance {
