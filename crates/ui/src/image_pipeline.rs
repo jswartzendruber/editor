@@ -1,9 +1,45 @@
 use crate::{
     camera_uniform::CameraUniform,
+    layout::{BoundingBox, Drawables},
     texture_atlas::{TextureAtlas, TextureId},
 };
 use std::{borrow::Cow, cell::RefCell, rc::Rc};
 use wgpu::util::DeviceExt;
+
+pub fn layout_text(
+    area: BoundingBox,
+    text: &Rc<str>,
+    atlas: &mut TextureAtlas,
+    font_size: f32,
+    queue: &wgpu::Queue,
+) -> Vec<Drawables> {
+    let mut drawables = vec![];
+
+    let mut baseline = area.top_left();
+    baseline.1 += font_size * 0.75;
+    for c in text.chars() {
+        let (metrics, texture_id) = atlas.map_get_or_insert_glyph(c, font_size, queue).unwrap();
+
+        let glyph_pos = (metrics.xmin as f32, metrics.ymin as f32);
+        let glyph_size = (metrics.width as f32, metrics.height as f32);
+
+        drawables.push(Drawables::TexturedRect(ImageInstance::add_instance(
+            atlas,
+            texture_id,
+            [
+                baseline.0 - glyph_pos.1,
+                baseline.1 - glyph_size.1 - glyph_pos.1,
+            ],
+            [glyph_size.0, glyph_size.1],
+            [1.0, 1.0, 1.0, 1.0],
+        )));
+
+        baseline.0 += metrics.advance_width as f32;
+        baseline.1 += metrics.advance_height as f32;
+    }
+
+    drawables
+}
 
 /// The projection matrix used in the shaders.
 #[repr(C)]

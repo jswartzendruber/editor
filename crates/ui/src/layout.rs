@@ -1,8 +1,9 @@
 use crate::{
-    image_pipeline::ImageInstance,
+    image_pipeline::{self, ImageInstance},
     quad_pipeline::QuadInstance,
     texture_atlas::{TextureAtlas, TextureId},
 };
+use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct Color {
@@ -100,11 +101,17 @@ pub enum Ui {
     Rectangle(Rectangle),
     Hbox(Hbox),
     Vbox(Vbox),
+    Text(Rc<str>, f32, Color),
     Spacer,
 }
 
 impl Ui {
-    pub fn layout(&self, atlas: &TextureAtlas, view_size: (f32, f32)) -> Vec<Drawables> {
+    pub fn layout(
+        &self,
+        atlas: &mut TextureAtlas,
+        view_size: (f32, f32),
+        queue: &wgpu::Queue,
+    ) -> Vec<Drawables> {
         let mut rects = vec![];
 
         match self {
@@ -115,6 +122,7 @@ impl Ui {
                     max: (view_size.0, view_size.1),
                 },
                 &mut rects,
+                queue,
             ),
             Ui::Vbox(v) => v.layout(
                 atlas,
@@ -123,10 +131,12 @@ impl Ui {
                     max: (view_size.0, view_size.1),
                 },
                 &mut rects,
+                queue,
             ),
             Ui::TexturedRectangle(_) => unimplemented!(),
             Ui::FixedSizedBox(_) => unimplemented!(),
             Ui::Rectangle(_) => unimplemented!(),
+            Ui::Text(_, _, _) => unimplemented!(),
             Ui::Spacer => unimplemented!(),
         }
 
@@ -182,7 +192,13 @@ pub enum Drawables {
 }
 
 pub trait UiContainer {
-    fn layout(&self, atlas: &TextureAtlas, parent_size: BoundingBox, rects: &mut Vec<Drawables>) {
+    fn layout(
+        &self,
+        atlas: &mut TextureAtlas,
+        parent_size: BoundingBox,
+        rects: &mut Vec<Drawables>,
+        queue: &wgpu::Queue,
+    ) {
         for (i, elem) in self.elements().iter().enumerate() {
             let child_bbox = match self.ty() {
                 UiType::Hbox => {
@@ -219,8 +235,8 @@ pub trait UiContainer {
                         color: r.color.to_f32_arr(),
                     }));
                 }
-                Ui::Hbox(hbox) => hbox.layout(atlas, child_bbox, rects),
-                Ui::Vbox(vbox) => vbox.layout(atlas, child_bbox, rects),
+                Ui::Hbox(hbox) => hbox.layout(atlas, child_bbox, rects, queue),
+                Ui::Vbox(vbox) => vbox.layout(atlas, child_bbox, rects, queue),
                 Ui::FixedSizedBox(fsb) => {
                     // The ceneter of the space we have
                     let bbox_center = child_bbox.center();
@@ -240,7 +256,16 @@ pub trait UiContainer {
                         color: fsb.background_color.to_f32_arr(),
                     }));
 
-                    fsb.layout(atlas, fixed_size_bbox, rects)
+                    fsb.layout(atlas, fixed_size_bbox, rects, queue)
+                }
+                Ui::Text(t, s, bc) => {
+                    // background color
+                    rects.push(Drawables::Rect(QuadInstance {
+                        position: [child_bbox.min.0, child_bbox.min.1],
+                        size: [child_bbox.width(), child_bbox.height()],
+                        color: bc.to_f32_arr(),
+                    }));
+                    rects.extend(image_pipeline::layout_text(child_bbox, t, atlas, *s, queue))
                 }
                 Ui::Spacer => {}
             }

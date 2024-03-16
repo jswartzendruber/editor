@@ -1,6 +1,7 @@
 use crate::texture::Texture;
 use etagere::{Allocation, AtlasAllocator};
 use image::{ImageError, RgbaImage};
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub enum AtlasError {
@@ -22,6 +23,8 @@ pub struct TextureId(usize);
 pub struct TextureAtlas {
     atlas: AtlasInternal,
     allocations: Vec<Allocation>,
+    glyph_map: HashMap<char, (fontdue::Metrics, TextureId)>,
+    font: fontdue::Font,
 }
 
 impl TextureAtlas {
@@ -29,12 +32,30 @@ impl TextureAtlas {
         Self {
             atlas: AtlasInternal::new(device, queue, size),
             allocations: vec![],
+            glyph_map: HashMap::new(),
+            font: fontdue::Font::from_bytes(
+                include_bytes!("../../../res/RobotoMono-Regular.ttf") as &[u8],
+                fontdue::FontSettings::default(),
+            )
+            .unwrap(),
         }
+    }
+
+    pub fn load_char_from_image(
+        &mut self,
+        queue: &wgpu::Queue,
+        img: &RgbaImage,
+        c: char,
+        metrics: fontdue::Metrics,
+    ) -> Result<TextureId, AtlasError> {
+        let texture_id = self.load_from_image(queue, img)?;
+        self.glyph_map.insert(c, (metrics, texture_id));
+        Ok(texture_id)
     }
 
     /// Allocates the passed in image on the atlas. Returns an ID which allows for
     /// looking up the size and other attributes of the allocation.
-    pub fn load_from_image(
+    fn load_from_image(
         &mut self,
         queue: &wgpu::Queue,
         img: &RgbaImage,
@@ -69,6 +90,33 @@ impl TextureAtlas {
 
     pub fn texture(&self) -> &Texture {
         &self.atlas.texture
+    }
+
+    pub fn map_get_or_insert_glyph(
+        &mut self,
+        c: char,
+        font_size: f32,
+        queue: &wgpu::Queue,
+    ) -> Option<(fontdue::Metrics, TextureId)> {
+        if let Some(res) = self.glyph_map.get(&c) {
+            Some(*res)
+        } else {
+            let (metrics, bitmap) = self.font.rasterize(c, font_size);
+            let image = RgbaImage::from_raw(
+                metrics.width as u32,
+                metrics.height as u32,
+                bitmap
+                    .into_iter()
+                    .flat_map(|byte| [255, 255, 255, byte])
+                    .collect(),
+            )
+            .unwrap();
+            let id = self
+                .load_char_from_image(&queue, &image, c, metrics)
+                .unwrap();
+            self.glyph_map.insert(c, (metrics, id));
+            self.glyph_map.get(&c).copied()
+        }
     }
 }
 
@@ -106,6 +154,8 @@ impl AtlasInternal {
             .ok_or(AtlasError::AllocationError(AllocationError::AtlasFull))?;
 
         // Adjust the allocated rectangle to hide the padding
+        // TODO: better way of doing this that is not lying about the size of the allocation and re-using
+        // the allocation type from etagere?
         allocation.rectangle.min.x = allocation.rectangle.min.x + 1;
         allocation.rectangle.min.y = allocation.rectangle.min.y + 1;
         allocation.rectangle.max.x = allocation.rectangle.min.x + img_size.0 as i32;
