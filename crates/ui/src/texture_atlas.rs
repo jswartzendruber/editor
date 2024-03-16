@@ -32,6 +32,19 @@ impl TextureAtlas {
         }
     }
 
+    /// Allocates the passed in image on the atlas. Returns an ID which allows for
+    /// looking up the size and other attributes of the allocation.
+    pub fn load_from_image(
+        &mut self,
+        queue: &wgpu::Queue,
+        img: &RgbaImage,
+    ) -> Result<TextureId, AtlasError> {
+        let allocation = self.atlas.allocate(queue, img)?;
+        let idx = self.allocations.len();
+        self.allocations.push(allocation);
+        Ok(TextureId(idx))
+    }
+
     /// Load an image from a file, and allocate it in the atlas. Returns an ID which
     /// allows for looking up the size and other attributes of the allocation.
     pub fn load_image_from_file(
@@ -43,10 +56,7 @@ impl TextureAtlas {
             .unwrap()
             .decode()
             .map_err(AtlasError::ImageLoadingError)?;
-        let allocation = self.atlas.allocate(queue, &img.to_rgba8())?;
-        let idx = self.allocations.len();
-        self.allocations.push(allocation);
-        Ok(TextureId(idx))
+        self.load_from_image(queue, &img.to_rgba8())
     }
 
     pub fn get_allocation(&self, texture_id: TextureId) -> Allocation {
@@ -86,12 +96,20 @@ impl AtlasInternal {
     /// Returns an error or the size of the successfull allocation
     fn allocate(&mut self, queue: &wgpu::Queue, img: &RgbaImage) -> Result<Allocation, AtlasError> {
         let img_size = img.dimensions();
-        let allocation_size = etagere::size2(img_size.0 as i32, img_size.1 as i32);
 
-        let allocation = self
+        // Add a small amount of padding to the image to avoid bleeding when looking up in the atlas
+        let allocation_size = etagere::size2(img_size.0 as i32 + 2, img_size.1 as i32 + 2);
+
+        let mut allocation = self
             .allocator
             .allocate(allocation_size)
             .ok_or(AtlasError::AllocationError(AllocationError::AtlasFull))?;
+
+        // Adjust the allocated rectangle to hide the padding
+        allocation.rectangle.min.x = allocation.rectangle.min.x + 1;
+        allocation.rectangle.min.y = allocation.rectangle.min.y + 1;
+        allocation.rectangle.max.x = allocation.rectangle.min.x + img_size.0 as i32;
+        allocation.rectangle.max.y = allocation.rectangle.min.y + img_size.1 as i32;
 
         let xmin = allocation.rectangle.min.x;
         let ymin = allocation.rectangle.min.y;

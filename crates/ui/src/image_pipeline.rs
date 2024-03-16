@@ -217,7 +217,11 @@ impl ImagePipeline {
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
-                targets: &[Some(wgpu::TextureFormat::Bgra8UnormSrgb.into())],
+                targets: &[Some(wgpu::ColorTargetState {
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    format: wgpu::TextureFormat::Bgra8UnormSrgb,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
             }),
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,

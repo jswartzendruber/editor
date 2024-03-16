@@ -6,11 +6,13 @@ pub mod texture;
 pub mod texture_atlas;
 
 use camera_uniform::CameraUniform;
+use fontdue::Font;
+use image::RgbaImage;
 use image_pipeline::ImagePipeline;
 use layout::{Color, FixedSizedBox, Hbox, Rectangle, TexturedRectangle, Ui, Vbox};
 use quad_pipeline::QuadPipeline;
 use std::{cell::RefCell, rc::Rc};
-use texture_atlas::TextureAtlas;
+use texture_atlas::{TextureAtlas, TextureId};
 use wgpu::Surface;
 use winit::{
     dpi::PhysicalSize,
@@ -34,6 +36,9 @@ struct State<'window> {
     image_pipeline: ImagePipeline,
 
     layout_tree: Ui,
+
+    g_id: TextureId,
+    g_metrics: fontdue::Metrics,
 }
 
 impl<'window> State<'window> {
@@ -114,6 +119,20 @@ impl<'window> State<'window> {
             ])),
         ]));
 
+        let font_bytes = include_bytes!("../../../res/RobotoMono-Regular.ttf") as &[u8];
+        let font = Font::from_bytes(font_bytes, fontdue::FontSettings::default()).unwrap();
+        let (metrics, bitmap) = font.rasterize('J', 72.0);
+        let image = RgbaImage::from_raw(
+            metrics.width as u32,
+            metrics.height as u32,
+            bitmap
+                .into_iter()
+                .flat_map(|byte| [255, 255, 255, byte])
+                .collect(),
+        )
+        .unwrap();
+        let id = atlas.load_from_image(&queue, &image).unwrap();
+
         Self {
             window,
             surface,
@@ -128,6 +147,9 @@ impl<'window> State<'window> {
             image_pipeline,
 
             layout_tree,
+
+            g_id: id,
+            g_metrics: metrics,
         }
     }
 
@@ -164,6 +186,21 @@ impl<'window> State<'window> {
                 layout::Drawables::TexturedRect(ii) => image_instances.push(ii),
             }
         }
+
+        image_instances.push(image_pipeline::ImageInstance::add_instance(
+            &self.atlas,
+            self.g_id,
+            [500.0, 450.0],
+            [self.g_metrics.width as f32, self.g_metrics.height as f32],
+            [1.0, 1.0, 1.0, 1.0],
+        ));
+        image_instances.push(image_pipeline::ImageInstance::add_instance(
+            &self.atlas,
+            self.g_id,
+            [500.0 + (self.g_metrics.width as f32 * 1.1), 450.0],
+            [self.g_metrics.width as f32, self.g_metrics.height as f32],
+            [1.0, 1.0, 1.0, 1.0],
+        ));
 
         self.quad_pipeline.update(&self.queue);
         self.image_pipeline.update(&self.queue);
