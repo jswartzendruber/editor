@@ -18,14 +18,14 @@ pub fn layout_text(
     let mut baseline = area.top_left();
     baseline.1 += font_size * 0.75;
     for c in text.chars() {
-        let (metrics, texture_id) = atlas.map_get_or_insert_glyph(c, font_size, queue).unwrap();
+        let glyph = atlas.map_get_or_insert_glyph(c, font_size, queue).unwrap();
 
-        let glyph_pos = (metrics.xmin as f32, metrics.ymin as f32);
-        let glyph_size = (metrics.width as f32, metrics.height as f32);
+        let glyph_pos = (glyph.metrics.xmin as f32, glyph.metrics.ymin as f32);
+        let glyph_size = (glyph.metrics.width as f32, glyph.metrics.height as f32);
 
         drawables.push(Drawables::TexturedRect(ImageInstance::add_instance(
             atlas,
-            texture_id,
+            glyph.texture_id,
             [
                 baseline.0 - glyph_pos.1,
                 baseline.1 - glyph_size.1 - glyph_pos.1,
@@ -34,8 +34,7 @@ pub fn layout_text(
             [1.0, 1.0, 1.0, 1.0],
         )));
 
-        baseline.0 += metrics.advance_width as f32;
-        baseline.1 += metrics.advance_height as f32;
+        baseline.0 += glyph.metrics.advance_width.round() + glyph.subpixel_alignment.to_offset();
     }
 
     drawables

@@ -20,10 +20,52 @@ pub enum AllocationError {
 #[derive(Debug, Clone, Copy)]
 pub struct TextureId(usize);
 
+#[derive(Debug, Clone, Copy)]
+pub struct SubpixelAlignment(u8);
+
+// Thanks https://www.warp.dev/blog/adventures-text-rendering-kerning-glyph-atlases
+impl SubpixelAlignment {
+    const STEPS: u8 = 3;
+
+    pub fn new(x: f32) -> Self {
+        let scaled = x * Self::STEPS as f32;
+        let align = (scaled.round() % Self::STEPS as f32) as u8;
+        Self(align)
+    }
+
+    pub fn to_offset(&self) -> f32 {
+        self.0 as f32 / Self::STEPS as f32
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct FontGlyph {
+    pub subpixel_alignment: SubpixelAlignment,
+    pub metrics: fontdue::Metrics,
+    pub texture_id: TextureId,
+    pub font_size: f32,
+}
+
+impl FontGlyph {
+    pub fn new(
+        subpixel_alignment: SubpixelAlignment,
+        metrics: fontdue::Metrics,
+        texture_id: TextureId,
+        font_size: f32,
+    ) -> Self {
+        Self {
+            subpixel_alignment,
+            metrics,
+            texture_id,
+            font_size,
+        }
+    }
+}
+
 pub struct TextureAtlas {
     atlas: AtlasInternal,
     allocations: Vec<Allocation>,
-    glyph_map: HashMap<char, (fontdue::Metrics, TextureId)>,
+    glyph_map: HashMap<char, FontGlyph>,
     font: fontdue::Font,
 }
 
@@ -47,9 +89,14 @@ impl TextureAtlas {
         img: &RgbaImage,
         c: char,
         metrics: fontdue::Metrics,
+        font_size: f32,
+        subpixel_alignment: SubpixelAlignment,
     ) -> Result<TextureId, AtlasError> {
         let texture_id = self.load_from_image(queue, img)?;
-        self.glyph_map.insert(c, (metrics, texture_id));
+        self.glyph_map.insert(
+            c,
+            FontGlyph::new(subpixel_alignment, metrics, texture_id, font_size),
+        );
         Ok(texture_id)
     }
 
@@ -97,11 +144,12 @@ impl TextureAtlas {
         c: char,
         font_size: f32,
         queue: &wgpu::Queue,
-    ) -> Option<(fontdue::Metrics, TextureId)> {
+    ) -> Option<FontGlyph> {
         if let Some(res) = self.glyph_map.get(&c) {
             Some(*res)
         } else {
             let (metrics, bitmap) = self.font.rasterize(c, font_size);
+            let subpixel_alignment = SubpixelAlignment::new(metrics.advance_width);
             let image = RgbaImage::from_raw(
                 metrics.width as u32,
                 metrics.height as u32,
@@ -111,10 +159,8 @@ impl TextureAtlas {
                     .collect(),
             )
             .unwrap();
-            let id = self
-                .load_char_from_image(&queue, &image, c, metrics)
+            self.load_char_from_image(&queue, &image, c, metrics, font_size, subpixel_alignment)
                 .unwrap();
-            self.glyph_map.insert(c, (metrics, id));
             self.glyph_map.get(&c).copied()
         }
     }
