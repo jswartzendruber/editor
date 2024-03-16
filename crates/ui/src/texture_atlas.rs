@@ -133,9 +133,12 @@ impl TextureAtlas {
             self.face.load_char(c as usize, LoadFlag::RENDER).unwrap();
 
             let glyph = self.face.glyph();
+            let glyph_width = glyph.bitmap().width() as f32;
+            let glyph_height = glyph.bitmap().rows() as f32;
+
             let image = RgbaImage::from_raw(
-                glyph.bitmap().width() as u32,
-                glyph.bitmap().rows() as u32,
+                glyph_width as u32,
+                glyph_height as u32,
                 glyph
                     .bitmap()
                     .buffer()
@@ -146,13 +149,13 @@ impl TextureAtlas {
             .unwrap();
             let metrics = GlyphMetrics {
                 advance: (
-                    (glyph.advance().x / 64) as f32,
-                    (glyph.advance().y / 64) as f32,
+                    glyph.advance().x as f32 / 64.0,
+                    glyph.advance().y as f32 / 64.0,
                 ),
-                size: (glyph.bitmap().width() as f32, glyph.bitmap().rows() as f32),
+                size: (glyph_width, glyph_height),
                 pos: (
                     glyph.bitmap_left() as f32,
-                    (glyph.bitmap_top() - glyph.bitmap().rows()) as f32,
+                    glyph.bitmap_top() as f32,
                 ),
             };
 

@@ -23,8 +23,6 @@ pub fn layout_text(
         let glyph = atlas.map_get_or_insert_glyph(c, font_size, queue).unwrap();
         let metrics = glyph.metrics;
 
-        println!("{:?}", metrics);
-
         // Move below, to next line if we would go past the border
         if baseline.0 - metrics.pos.0 + metrics.size.0 >= area.max.0 {
             baseline.1 += line_height;
@@ -40,8 +38,8 @@ pub fn layout_text(
             atlas,
             glyph.texture_id,
             [
-                baseline.0,
-                baseline.1 - metrics.size.1 - metrics.pos.1,
+                baseline.0 + metrics.pos.0,
+                baseline.1 - metrics.pos.1,
             ],
             [metrics.size.0, metrics.size.1],
             [1.0, 1.0, 1.0, 1.0],
