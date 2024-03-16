@@ -7,7 +7,7 @@ pub mod texture_atlas;
 
 use camera_uniform::CameraUniform;
 use image_pipeline::ImagePipeline;
-use layout::{Color, Hbox, Rectangle, TexturedRectangle, Ui, Vbox};
+use layout::{Color, FixedSizedBox, Hbox, Rectangle, TexturedRectangle, Ui, Vbox};
 use quad_pipeline::QuadPipeline;
 use std::{cell::RefCell, rc::Rc};
 use texture_atlas::TextureAtlas;
@@ -101,7 +101,12 @@ impl<'window> State<'window> {
                 Ui::Rectangle(Rectangle::new(Color::new(0, 255, 0, 255))),
                 Ui::TexturedRectangle(TexturedRectangle::new(tree_atlas_idx)),
             ])),
-            Ui::Rectangle(Rectangle::new(Color::new(255, 0, 0, 255))),
+            Ui::FixedSizedBox(FixedSizedBox::new(
+                200.0,
+                100.0,
+                Ui::Rectangle(Rectangle::new(Color::new(100, 100, 100, 255))),
+                Color::new(15, 15, 15, 255),
+            )),
             Ui::Vbox(Vbox::new(vec![
                 Ui::TexturedRectangle(TexturedRectangle::new(hello_atlas_idx)),
                 Ui::Rectangle(Rectangle::new(Color::new(0, 255, 0, 255))),

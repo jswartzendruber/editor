@@ -46,7 +46,10 @@ pub struct TexturedRectangle {
 
 impl TexturedRectangle {
     pub fn new(texture_id: TextureId) -> Self {
-        Self { texture_id, tint: Color::new(255, 255, 255, 255) }
+        Self {
+            texture_id,
+            tint: Color::new(255, 255, 255, 255),
+        }
     }
 
     pub fn new_tinted(texture_id: TextureId, tint: Color) -> Self {
@@ -54,9 +57,46 @@ impl TexturedRectangle {
     }
 }
 
+pub enum UiType {
+    CenteredBox,
+    Hbox,
+    Vbox,
+}
+
+#[derive(Debug)]
+pub struct FixedSizedBox {
+    width: f32,
+    height: f32,
+    /// Despite being a vector, this will only hold one item.
+    child: Vec<Ui>,
+    background_color: Color,
+}
+
+impl FixedSizedBox {
+    pub fn new(width: f32, height: f32, child: Ui, background_color: Color) -> Self {
+        Self {
+            width,
+            height,
+            child: vec![child],
+            background_color,
+        }
+    }
+}
+
+impl UiContainer for FixedSizedBox {
+    fn elements(&self) -> &Vec<Ui> {
+        &self.child
+    }
+
+    fn ty(&self) -> UiType {
+        UiType::CenteredBox
+    }
+}
+
 #[derive(Debug)]
 pub enum Ui {
     TexturedRectangle(TexturedRectangle),
+    FixedSizedBox(FixedSizedBox),
     Rectangle(Rectangle),
     Hbox(Hbox),
     Vbox(Vbox),
@@ -85,6 +125,7 @@ impl Ui {
                 &mut rects,
             ),
             Ui::TexturedRectangle(_) => unimplemented!(),
+            Ui::FixedSizedBox(_) => unimplemented!(),
             Ui::Rectangle(_) => unimplemented!(),
             Ui::Spacer => unimplemented!(),
         }
@@ -93,7 +134,7 @@ impl Ui {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct BoundingBox {
     pub min: (f32, f32),
     pub max: (f32, f32),
@@ -140,21 +181,25 @@ pub enum Drawables {
     TexturedRect(ImageInstance),
 }
 
-pub trait UiElement {
+pub trait UiContainer {
     fn layout(&self, atlas: &TextureAtlas, parent_size: BoundingBox, rects: &mut Vec<Drawables>) {
         for (i, elem) in self.elements().iter().enumerate() {
-            let child_bbox = if self.is_hbox() {
-                let child_index = i;
-                let child_width = parent_size.width() / self.elements().len() as f32;
-                let x0 = parent_size.min.0 + child_width * child_index as f32;
+            let child_bbox = match self.ty() {
+                UiType::Hbox => {
+                    let child_index = i;
+                    let child_width = parent_size.width() / self.elements().len() as f32;
+                    let x0 = parent_size.min.0 + child_width * child_index as f32;
 
-                BoundingBox::new(x0, parent_size.min.1, x0 + child_width, parent_size.max.1)
-            } else {
-                let child_index = self.elements().len() - i - 1;
-                let child_height = parent_size.height() / self.elements().len() as f32;
-                let y0 = parent_size.min.1 + child_height * child_index as f32;
+                    BoundingBox::new(x0, parent_size.min.1, x0 + child_width, parent_size.max.1)
+                }
+                UiType::Vbox => {
+                    let child_index = self.elements().len() - i - 1;
+                    let child_height = parent_size.height() / self.elements().len() as f32;
+                    let y0 = parent_size.min.1 + child_height * child_index as f32;
 
-                BoundingBox::new(parent_size.min.0, y0, parent_size.max.0, y0 + child_height)
+                    BoundingBox::new(parent_size.min.0, y0, parent_size.max.0, y0 + child_height)
+                }
+                UiType::CenteredBox => parent_size,
             };
 
             match elem {
@@ -176,6 +221,27 @@ pub trait UiElement {
                 }
                 Ui::Hbox(hbox) => hbox.layout(atlas, child_bbox, rects),
                 Ui::Vbox(vbox) => vbox.layout(atlas, child_bbox, rects),
+                Ui::FixedSizedBox(fsb) => {
+                    // The ceneter of the space we have
+                    let bbox_center = child_bbox.center();
+                    let half_width = fsb.width / 2.0;
+                    let half_height = fsb.height / 2.0;
+
+                    let fixed_size_bbox = BoundingBox::new(
+                        bbox_center.0 - half_width,
+                        bbox_center.1 + half_height,
+                        bbox_center.0 + half_width,
+                        bbox_center.1 - half_height,
+                    );
+
+                    rects.push(Drawables::Rect(QuadInstance {
+                        position: [child_bbox.min.0, child_bbox.min.1],
+                        size: [child_bbox.width(), child_bbox.height()],
+                        color: fsb.background_color.to_f32_arr(),
+                    }));
+
+                    fsb.layout(atlas, fixed_size_bbox, rects)
+                }
                 Ui::Spacer => {}
             }
         }
@@ -183,7 +249,7 @@ pub trait UiElement {
 
     fn elements(&self) -> &Vec<Ui>;
 
-    fn is_hbox(&self) -> bool;
+    fn ty(&self) -> UiType;
 }
 
 #[derive(Debug)]
@@ -197,13 +263,13 @@ impl Hbox {
     }
 }
 
-impl UiElement for Hbox {
+impl UiContainer for Hbox {
     fn elements(&self) -> &Vec<Ui> {
         &self.elements
     }
 
-    fn is_hbox(&self) -> bool {
-        true
+    fn ty(&self) -> UiType {
+        UiType::Hbox
     }
 }
 
@@ -218,12 +284,12 @@ impl Vbox {
     }
 }
 
-impl UiElement for Vbox {
+impl UiContainer for Vbox {
     fn elements(&self) -> &Vec<Ui> {
         &self.elements
     }
 
-    fn is_hbox(&self) -> bool {
-        false
+    fn ty(&self) -> UiType {
+        UiType::Vbox
     }
 }
