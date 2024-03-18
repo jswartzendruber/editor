@@ -50,6 +50,87 @@ pub fn layout_text(
     drawables
 }
 
+pub fn layout_text_centered(
+    area: BoundingBox,
+    text: &Rc<str>,
+    atlas: &mut TextureAtlas,
+    font_size: f32,
+    queue: &wgpu::Queue,
+    font_color: &Color,
+) -> Vec<Drawables> {
+    let mut drawables = vec![];
+
+    let line_height = font_size * 1.1;
+    let mut baseline = area.top_left();
+    baseline.1 += line_height;
+
+    let mut line_start = baseline;
+    let mut lines = 0;
+    let mut line_info = vec![];
+    for c in text.chars() {
+        let glyph = atlas.map_get_or_insert_glyph(c, font_size, queue).unwrap();
+        let metrics = glyph.metrics;
+
+        // Move below, to next line if we would go past the border
+        if baseline.0 - metrics.pos.0 + metrics.size.0 >= area.max.0 {
+            // Save the end position and length of line
+            let line_end = baseline;
+            line_info.push((line_start, line_end));
+            lines += 1;
+
+            baseline.1 += line_height;
+            baseline.0 = area.min.0;
+            line_start = baseline;
+        }
+
+        // Break early if we leave our box
+        if !area.inside(baseline) {
+            break;
+        }
+
+        baseline.0 += metrics.advance.0;
+        baseline.1 += metrics.advance.1;
+    }
+
+    // Increment the last line and save it's position
+    let line_end = baseline;
+    line_info.push((line_start, line_end));
+    lines += 1;
+
+    for line in 0..lines {
+        let (line_start, line_end) = line_info[line];
+        let text_width = line_end.0 - line_start.0;
+        let mut baseline = (
+            area.top_left().0 + (area.width() / 2.0) - (text_width / 2.0),
+            area.top_left().1 + (area.height() / 2.0) - ((line_height * (lines - 1) as f32) / 2.0),
+        );
+
+        for c in text.chars() {
+            let glyph = atlas.map_get_or_insert_glyph(c, font_size, queue).unwrap();
+            let metrics = glyph.metrics;
+
+            // Move below, to next line if we would go past the border
+            if baseline.0 - metrics.pos.0 + metrics.size.0 >= area.max.0 {
+                baseline.1 += line_height;
+                baseline.0 = area.min.0;
+            }
+
+            drawables.push(Drawables::TexturedRect(ImageInstance::add_instance(
+                atlas,
+                glyph.texture_id,
+                [baseline.0 + metrics.pos.0, baseline.1 - metrics.pos.1],
+                [metrics.size.0, metrics.size.1],
+                font_color.to_f32_arr(),
+            )));
+
+            baseline.0 += metrics.advance.0;
+            baseline.1 += metrics.advance.1;
+        }
+    }
+
+    drawables
+}
+
 /// The projection matrix used in the shaders.
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]

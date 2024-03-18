@@ -7,7 +7,10 @@ pub mod texture_atlas;
 
 use camera_uniform::CameraUniform;
 use image_pipeline::ImagePipeline;
-use layout::{Color, FixedSizedBox, Hbox, Rectangle, TextDetails, TexturedRectangle, Ui, Vbox};
+use layout::{
+    Button, ButtonState, Color, FixedSizedBox, Hbox, Rectangle, TextAlign, TextDetails,
+    TexturedRectangle, Ui, Vbox,
+};
 use quad_pipeline::QuadPipeline;
 use std::{cell::RefCell, rc::Rc};
 use texture_atlas::TextureAtlas;
@@ -101,22 +104,43 @@ impl<'window> State<'window> {
                 Ui::Rectangle(Rectangle::new(Color::new(0, 255, 0, 255))),
                 Ui::TexturedRectangle(TexturedRectangle::new(tree_atlas_idx)),
             ])),
-            Ui::FixedSizedBox(FixedSizedBox::new(
-                400.0,
-                200.0,
-                Ui::Text(
-                    TextDetails::new(
-                        Rc::from("wrapping! hello world! wrapping! the next part is cut off because it is too long!"),
+            Ui::Vbox(Vbox::new(vec![
+                Ui::Text(TextDetails::new(
+                    Rc::from("This text wraps and resizes with the parent's bounding box!"),
+                    24.0,
+                    Color::new(255, 0, 0, 255),
+                    Color::new(10, 10, 10, 255),
+                    TextAlign::Left,
+                )),
+                Ui::FixedSizedBox(FixedSizedBox::new(
+                    400.0,
+                    200.0,
+                    Ui::Text(TextDetails::new(
+                        Rc::from("text wrapping demo! text wrapping demo! text wrapping demo!"),
                         24.0,
                         Color::new(255, 0, 0, 255),
                         Color::new(10, 10, 10, 255),
+                        TextAlign::Left,
+                    )),
+                    Color::new(5, 5, 5, 255),
+                )),
+                Ui::Button(Button::new(
+                    ButtonState::Initial,
+                    Color::new(50, 50, 50, 255),
+                    Color::new(80, 80, 80, 255),
+                    Color::new(125, 125, 125, 255),
+                    TextDetails::new(
+                        Rc::from("Increment!"),
+                        24.0,
+                        Color::new(255, 0, 0, 255),
+                        Color::new(10, 10, 10, 255),
+                        TextAlign::Center,
                     ),
-                ),
-                Color::new(5, 5, 5, 255),
-            )),
+                )),
+            ])),
             Ui::Vbox(Vbox::new(vec![
                 Ui::TexturedRectangle(TexturedRectangle::new(hello_atlas_idx)),
-                Ui::Rectangle(Rectangle::new(Color::new(0, 255, 0, 255))),
+                Ui::Rectangle(Rectangle::new(Color::new(0, 0, 255, 255))),
                 Ui::TexturedRectangle(TexturedRectangle::new(rect_atlas_idx)),
             ])),
         ]));

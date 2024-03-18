@@ -5,7 +5,7 @@ use crate::{
 };
 use std::rc::Rc;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Color {
     r: u8,
     g: u8,
@@ -95,20 +95,68 @@ impl UiContainer for FixedSizedBox {
 }
 
 #[derive(Debug)]
+pub enum TextAlign {
+    Left,
+    Center,
+}
+
+#[derive(Debug)]
 pub struct TextDetails {
     text: Rc<str>,
     font_size: f32,
     text_color: Color,
     background_color: Color,
+    align: TextAlign,
 }
 
 impl TextDetails {
-    pub fn new(text: Rc<str>, font_size: f32, text_color: Color, background_color: Color) -> Self {
+    pub fn new(
+        text: Rc<str>,
+        font_size: f32,
+        text_color: Color,
+        background_color: Color,
+        align: TextAlign,
+    ) -> Self {
         Self {
             text,
             font_size,
             text_color,
             background_color,
+            align,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum ButtonState {
+    Hovered,
+    Pressed,
+    Initial,
+}
+
+#[derive(Debug)]
+pub struct Button {
+    state: ButtonState,
+    initial_color: Color,
+    hover_color: Color,
+    pressed_color: Color,
+    text: TextDetails,
+}
+
+impl Button {
+    pub fn new(
+        state: ButtonState,
+        initial_color: Color,
+        hover_color: Color,
+        pressed_color: Color,
+        text: TextDetails,
+    ) -> Self {
+        Self {
+            state,
+            hover_color,
+            pressed_color,
+            initial_color,
+            text,
         }
     }
 }
@@ -119,6 +167,7 @@ pub enum Ui {
     FixedSizedBox(FixedSizedBox),
     Rectangle(Rectangle),
     Text(TextDetails),
+    Button(Button),
     Hbox(Hbox),
     Vbox(Vbox),
     Spacer,
@@ -152,11 +201,7 @@ impl Ui {
                 &mut rects,
                 queue,
             ),
-            Ui::TexturedRectangle(_) => unimplemented!(),
-            Ui::FixedSizedBox(_) => unimplemented!(),
-            Ui::Rectangle(_) => unimplemented!(),
-            Ui::Text(_) => unimplemented!(),
-            Ui::Spacer => unimplemented!(),
+            _ => unimplemented!(),
         }
 
         rects
@@ -205,6 +250,7 @@ impl BoundingBox {
     }
 }
 
+#[derive(Debug)]
 pub enum Drawables {
     Rect(QuadInstance),
     TexturedRect(ImageInstance),
@@ -277,6 +323,40 @@ pub trait UiContainer {
 
                     fsb.layout(atlas, fixed_size_bbox, rects, queue)
                 }
+                Ui::Button(b) => {
+                    let color = match b.state {
+                        ButtonState::Hovered => &b.hover_color,
+                        ButtonState::Pressed => &b.pressed_color,
+                        ButtonState::Initial => &b.initial_color,
+                    };
+
+                    // Use the button's background color of text to draw
+                    rects.push(Drawables::Rect(QuadInstance {
+                        position: [child_bbox.min.0, child_bbox.min.1],
+                        size: [child_bbox.width(), child_bbox.height()],
+                        color: color.to_f32_arr(),
+                    }));
+
+                    // TODO: construct a temporary UI and call layout on it to avoid duplication?
+                    match b.text.align {
+                        TextAlign::Left => rects.extend(image_pipeline::layout_text(
+                            child_bbox,
+                            &b.text.text,
+                            atlas,
+                            b.text.font_size,
+                            queue,
+                            &b.text.text_color,
+                        )),
+                        TextAlign::Center => rects.extend(image_pipeline::layout_text_centered(
+                            child_bbox,
+                            &b.text.text,
+                            atlas,
+                            b.text.font_size,
+                            queue,
+                            &b.text.text_color,
+                        )),
+                    }
+                }
                 Ui::Text(td) => {
                     // background color
                     rects.push(Drawables::Rect(QuadInstance {
@@ -284,14 +364,25 @@ pub trait UiContainer {
                         size: [child_bbox.width(), child_bbox.height()],
                         color: td.background_color.to_f32_arr(),
                     }));
-                    rects.extend(image_pipeline::layout_text(
-                        child_bbox,
-                        &td.text,
-                        atlas,
-                        td.font_size,
-                        queue,
-                        &td.text_color,
-                    ))
+
+                    match td.align {
+                        TextAlign::Left => rects.extend(image_pipeline::layout_text(
+                            child_bbox,
+                            &td.text,
+                            atlas,
+                            td.font_size,
+                            queue,
+                            &td.text_color,
+                        )),
+                        TextAlign::Center => rects.extend(image_pipeline::layout_text_centered(
+                            child_bbox,
+                            &td.text,
+                            atlas,
+                            td.font_size,
+                            queue,
+                            &td.text_color,
+                        )),
+                    }
                 }
                 Ui::Spacer => {}
             }
