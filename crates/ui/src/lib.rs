@@ -9,7 +9,7 @@ use camera_uniform::CameraUniform;
 use image_pipeline::ImagePipeline;
 use layout::{
     Button, ButtonState, Color, FixedSizedBox, Hbox, Rectangle, TextAlign, TextDetails,
-    TexturedRectangle, Ui, Vbox,
+    TexturedRectangle, Ui, UiState, Vbox,
 };
 use quad_pipeline::QuadPipeline;
 use std::{cell::RefCell, rc::Rc};
@@ -36,7 +36,7 @@ struct State<'window> {
     quad_pipeline: QuadPipeline,
     image_pipeline: ImagePipeline,
 
-    layout_tree: Ui,
+    ui_state: UiState,
 }
 
 impl<'window> State<'window> {
@@ -98,7 +98,7 @@ impl<'window> State<'window> {
         let quad_pipeline = QuadPipeline::new(&device, camera_uniform.clone());
         let image_pipeline = ImagePipeline::new(&device, camera_uniform.clone(), &atlas);
 
-        let layout_tree = Ui::Hbox(Hbox::new(vec![
+        let ui_state = UiState::new(Ui::Hbox(Hbox::new(vec![
             Ui::Vbox(Vbox::new(vec![
                 Ui::TexturedRectangle(TexturedRectangle::new(bamboo_atlas_idx)),
                 Ui::Rectangle(Rectangle::new(Color::new(0, 255, 0, 255))),
@@ -143,7 +143,7 @@ impl<'window> State<'window> {
                 Ui::Rectangle(Rectangle::new(Color::new(0, 0, 255, 255))),
                 Ui::TexturedRectangle(TexturedRectangle::new(rect_atlas_idx)),
             ])),
-        ]));
+        ])));
 
         Self {
             window,
@@ -158,7 +158,7 @@ impl<'window> State<'window> {
             quad_pipeline,
             image_pipeline,
 
-            layout_tree,
+            ui_state,
         }
     }
 
@@ -178,10 +178,11 @@ impl<'window> State<'window> {
     }
 
     fn update(&mut self) {
-        let instances = self.layout_tree.layout(
+        let instances = self.ui_state.layout(
             &mut self.atlas,
             (self.config.width as f32, self.config.height as f32),
             &self.queue,
+            &self.window,
         );
 
         let quad_instances = self.quad_pipeline.instances();
@@ -255,6 +256,12 @@ impl<'window> State<'window> {
                         self.update();
                         self.draw();
                     }
+                    WindowEvent::CursorMoved {
+                        device_id: _,
+                        position,
+                    } => self
+                        .ui_state
+                        .update_cursor_pos(position.x as f32, position.y as f32),
                     WindowEvent::CloseRequested
                     | WindowEvent::KeyboardInput {
                         event:

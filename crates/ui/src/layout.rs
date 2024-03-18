@@ -1,3 +1,5 @@
+use winit::window::Window;
+
 use crate::{
     image_pipeline::{self, ImageInstance},
     quad_pipeline::QuadInstance,
@@ -161,6 +163,38 @@ impl Button {
     }
 }
 
+pub struct UiState {
+    cursor_x: f32,
+    cursor_y: f32,
+    layout_tree: Ui,
+}
+
+impl UiState {
+    pub fn new(layout_tree: Ui) -> Self {
+        Self {
+            cursor_x: 0.0,
+            cursor_y: 0.0,
+            layout_tree,
+        }
+    }
+
+    pub fn layout(
+        &self,
+        atlas: &mut TextureAtlas,
+        view_size: (f32, f32),
+        queue: &wgpu::Queue,
+        window: &Window,
+    ) -> Vec<Drawables> {
+        self.layout_tree
+            .layout(atlas, view_size, queue, self, window)
+    }
+
+    pub fn update_cursor_pos(&mut self, cx: f32, cy: f32) {
+        self.cursor_x = cx;
+        self.cursor_y = cy;
+    }
+}
+
 #[derive(Debug)]
 pub enum Ui {
     TexturedRectangle(TexturedRectangle),
@@ -179,6 +213,8 @@ impl Ui {
         atlas: &mut TextureAtlas,
         view_size: (f32, f32),
         queue: &wgpu::Queue,
+        ui_state: &UiState,
+        window: &Window,
     ) -> Vec<Drawables> {
         let mut rects = vec![];
 
@@ -191,6 +227,8 @@ impl Ui {
                 },
                 &mut rects,
                 queue,
+                ui_state,
+                window,
             ),
             Ui::Vbox(v) => v.layout(
                 atlas,
@@ -200,6 +238,8 @@ impl Ui {
                 },
                 &mut rects,
                 queue,
+                ui_state,
+                window,
             ),
             _ => unimplemented!(),
         }
@@ -263,6 +303,8 @@ pub trait UiContainer {
         parent_size: BoundingBox,
         rects: &mut Vec<Drawables>,
         queue: &wgpu::Queue,
+        ui_state: &UiState,
+        window: &Window,
     ) {
         for (i, elem) in self.elements().iter().enumerate() {
             let child_bbox = match self.ty() {
@@ -300,8 +342,8 @@ pub trait UiContainer {
                         color: r.color.to_f32_arr(),
                     }));
                 }
-                Ui::Hbox(hbox) => hbox.layout(atlas, child_bbox, rects, queue),
-                Ui::Vbox(vbox) => vbox.layout(atlas, child_bbox, rects, queue),
+                Ui::Hbox(hbox) => hbox.layout(atlas, child_bbox, rects, queue, ui_state, window),
+                Ui::Vbox(vbox) => vbox.layout(atlas, child_bbox, rects, queue, ui_state, window),
                 Ui::FixedSizedBox(fsb) => {
                     // The ceneter of the space we have
                     let bbox_center = child_bbox.center();
@@ -321,13 +363,21 @@ pub trait UiContainer {
                         color: fsb.background_color.to_f32_arr(),
                     }));
 
-                    fsb.layout(atlas, fixed_size_bbox, rects, queue)
+                    fsb.layout(atlas, fixed_size_bbox, rects, queue, ui_state, window);
                 }
                 Ui::Button(b) => {
                     let color = match b.state {
                         ButtonState::Hovered => &b.hover_color,
                         ButtonState::Pressed => &b.pressed_color,
-                        ButtonState::Initial => &b.initial_color,
+                        ButtonState::Initial => {
+                            if child_bbox.inside((ui_state.cursor_x, ui_state.cursor_y)) {
+                                window.set_cursor_icon(winit::window::CursorIcon::Pointer);
+                                &b.hover_color
+                            } else {
+                                window.set_cursor_icon(winit::window::CursorIcon::Default);
+                                &b.initial_color
+                            }
+                        }
                     };
 
                     // Use the button's background color of text to draw
