@@ -7,10 +7,7 @@ pub mod texture_atlas;
 
 use camera_uniform::CameraUniform;
 use image_pipeline::ImagePipeline;
-use layout::{
-    Button, ButtonState, Color, FixedSizedBox, Hbox, Rectangle, TextAlign, TextDetails,
-    TexturedRectangle, Ui, UiState, Vbox,
-};
+use layout::{Color, Scene, TextAlign};
 use quad_pipeline::QuadPipeline;
 use std::{cell::RefCell, rc::Rc};
 use texture_atlas::TextureAtlas;
@@ -36,7 +33,7 @@ struct State<'window> {
     quad_pipeline: QuadPipeline,
     image_pipeline: ImagePipeline,
 
-    ui_state: UiState,
+    scene: Scene,
 }
 
 impl<'window> State<'window> {
@@ -98,52 +95,36 @@ impl<'window> State<'window> {
         let quad_pipeline = QuadPipeline::new(&device, camera_uniform.clone());
         let image_pipeline = ImagePipeline::new(&device, camera_uniform.clone(), &atlas);
 
-        let ui_state = UiState::new(Ui::Hbox(Hbox::new(vec![
-            Ui::Vbox(Vbox::new(vec![
-                Ui::TexturedRectangle(TexturedRectangle::new(bamboo_atlas_idx)),
-                Ui::Rectangle(Rectangle::new(Color::new(0, 255, 0, 255))),
-                Ui::TexturedRectangle(TexturedRectangle::new(tree_atlas_idx)),
-            ])),
-            Ui::Vbox(Vbox::new(vec![
-                Ui::Text(TextDetails::new(
-                    Rc::from("This text wraps and resizes with the parent's bounding box!"),
-                    24.0,
-                    Color::new(255, 0, 0, 255),
-                    Color::new(10, 10, 10, 255),
-                    TextAlign::Left,
-                )),
-                Ui::FixedSizedBox(FixedSizedBox::new(
-                    400.0,
-                    200.0,
-                    Ui::Text(TextDetails::new(
-                        Rc::from("text wrapping demo! text wrapping demo! text wrapping demo!"),
-                        24.0,
-                        Color::new(255, 0, 0, 255),
-                        Color::new(10, 10, 10, 255),
-                        TextAlign::Left,
-                    )),
-                    Color::new(5, 5, 5, 255),
-                )),
-                Ui::Button(Button::new(
-                    ButtonState::Initial,
-                    Color::new(50, 50, 50, 255),
-                    Color::new(80, 80, 80, 255),
-                    Color::new(125, 125, 125, 255),
-                    TextDetails::new(
-                        Rc::from("Increment!"),
-                        24.0,
-                        Color::new(255, 0, 0, 255),
-                        Color::new(10, 10, 10, 255),
-                        TextAlign::Center,
-                    ),
-                )),
-            ])),
-            Ui::Vbox(Vbox::new(vec![
-                Ui::TexturedRectangle(TexturedRectangle::new(hello_atlas_idx)),
-                Ui::Rectangle(Rectangle::new(Color::new(0, 0, 255, 255))),
-                Ui::TexturedRectangle(TexturedRectangle::new(rect_atlas_idx)),
-            ])),
-        ])));
+        let mut scene = Scene::new();
+        let vbi1 = scene.textured_rectangle(bamboo_atlas_idx);
+        let vbi2 = scene.rectangle(Color::new(0, 255, 0, 255));
+        let vbi3 = scene.textured_rectangle(tree_atlas_idx);
+        let vbox1 = scene.vbox(vec![vbi1, vbi2, vbi3]);
+
+        let vbi1 = scene.text_details(
+            Rc::from("This text wraps and resizes with the parent's bounding box!"),
+            24.0,
+            Color::new(255, 0, 0, 255),
+            Color::new(10, 10, 10, 255),
+            TextAlign::Left,
+        );
+        let fsb1 = scene.text_details(
+            Rc::from("text wrapping demo! text wrapping demo! text wrapping demo!"),
+            24.0,
+            Color::new(255, 0, 0, 255),
+            Color::new(10, 10, 10, 255),
+            TextAlign::Left,
+        );
+        let vbi2 = scene.fixed_size_bbox(400.0, 200.0, fsb1, Color::new(5, 5, 5, 255));
+        let vbox2 = scene.vbox(vec![vbi1, vbi2]);
+
+        let vbi1 = scene.textured_rectangle(hello_atlas_idx);
+        let vbi2 = scene.rectangle(Color::new(0, 0, 255, 255));
+        let vbi3 = scene.textured_rectangle(rect_atlas_idx);
+        let vbox3 = scene.vbox(vec![vbi1, vbi2, vbi3]);
+
+        let root = scene.hbox(vec![vbox1, vbox2, vbox3]);
+        scene.set_root(root);
 
         Self {
             window,
@@ -158,7 +139,7 @@ impl<'window> State<'window> {
             quad_pipeline,
             image_pipeline,
 
-            ui_state,
+            scene,
         }
     }
 
@@ -178,7 +159,7 @@ impl<'window> State<'window> {
     }
 
     fn update(&mut self) {
-        let instances = self.ui_state.layout(
+        let instances = self.scene.layout(
             &mut self.atlas,
             (self.config.width as f32, self.config.height as f32),
             &self.queue,
@@ -260,7 +241,7 @@ impl<'window> State<'window> {
                         device_id: _,
                         position,
                     } => self
-                        .ui_state
+                        .scene
                         .update_cursor_pos(position.x as f32, position.y as f32),
                     WindowEvent::CloseRequested
                     | WindowEvent::KeyboardInput {
