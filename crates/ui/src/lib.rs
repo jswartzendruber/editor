@@ -96,34 +96,40 @@ impl<'window> State<'window> {
         let image_pipeline = ImagePipeline::new(&device, camera_uniform.clone(), &atlas);
 
         let mut scene = Scene::new();
-        let vbi1 = scene.textured_rectangle(bamboo_atlas_idx);
-        let vbi2 = scene.rectangle(Color::new(0, 255, 0, 255));
-        let vbi3 = scene.textured_rectangle(tree_atlas_idx);
-        let vbox1 = scene.vbox(vec![vbi1, vbi2, vbi3]);
 
-        let vbi1 = scene.text_details(
-            Rc::from("This text wraps and resizes with the parent's bounding box!"),
-            24.0,
-            Color::new(255, 0, 0, 255),
-            Color::new(10, 10, 10, 255),
-            TextAlign::Left,
-        );
-        let fsb1 = scene.text_details(
-            Rc::from("text wrapping demo! text wrapping demo! text wrapping demo!"),
-            24.0,
-            Color::new(255, 0, 0, 255),
-            Color::new(10, 10, 10, 255),
-            TextAlign::Left,
-        );
-        let vbi2 = scene.fixed_size_bbox(400.0, 200.0, fsb1, Color::new(5, 5, 5, 255));
-        let vbox2 = scene.vbox(vec![vbi1, vbi2]);
-
-        let vbi1 = scene.textured_rectangle(hello_atlas_idx);
-        let vbi2 = scene.rectangle(Color::new(0, 0, 255, 255));
-        let vbi3 = scene.textured_rectangle(rect_atlas_idx);
-        let vbox3 = scene.vbox(vec![vbi1, vbi2, vbi3]);
-
-        let root = scene.hbox(vec![vbox1, vbox2, vbox3]);
+        let root = scene.hbox(vec![
+            scene.vbox(vec![
+                scene.textured_rectangle(bamboo_atlas_idx),
+                scene.rectangle(Color::new(0, 255, 0, 255)),
+                scene.textured_rectangle(tree_atlas_idx),
+            ]),
+            scene.vbox(vec![
+                scene.text_details(
+                    Rc::from("This text wraps and resizes with the parent's bounding box!"),
+                    24.0,
+                    Color::new(255, 0, 0, 255),
+                    Color::new(10, 10, 10, 255),
+                    TextAlign::Left,
+                ),
+                scene.fixed_size_bbox(
+                    400.0,
+                    200.0,
+                    scene.text_details(
+                        Rc::from("text wrapping demo! text wrapping demo! text wrapping demo!"),
+                        24.0,
+                        Color::new(255, 0, 0, 255),
+                        Color::new(10, 10, 10, 255),
+                        TextAlign::Left,
+                    ),
+                    Color::new(5, 5, 5, 255),
+                ),
+            ]),
+            scene.vbox(vec![
+                scene.textured_rectangle(hello_atlas_idx),
+                scene.rectangle(Color::new(0, 0, 255, 255)),
+                scene.textured_rectangle(rect_atlas_idx),
+            ]),
+        ]);
         scene.set_root(root);
 
         Self {

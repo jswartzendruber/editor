@@ -3,7 +3,7 @@ use crate::{
     quad_pipeline::QuadInstance,
     texture_atlas::{TextureAtlas, TextureId},
 };
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 use winit::window::Window;
 
 #[derive(Debug, Clone, Copy)]
@@ -269,7 +269,7 @@ impl Ui {
 
 #[derive(Debug)]
 pub struct Scene {
-    nodes: Vec<Ui>,
+    nodes: RefCell<Vec<Rc<Ui>>>,
     node_root: UiNodeId,
     cursor_pos: (f32, f32),
 }
@@ -277,7 +277,7 @@ pub struct Scene {
 impl Scene {
     pub fn new() -> Self {
         Self {
-            nodes: vec![],
+            nodes: RefCell::new(vec![]),
             node_root: UiNodeId(0),
             cursor_pos: (0.0, 0.0),
         }
@@ -308,7 +308,7 @@ impl Scene {
     }
 
     pub fn fixed_size_bbox(
-        &mut self,
+        &self,
         width: f32,
         height: f32,
         child: UiNodeId,
@@ -320,37 +320,43 @@ impl Scene {
             child,
             background_color,
         };
-        let idx = self.nodes.len();
-        self.nodes.push(Ui::FixedSizedBox(obj));
+        let idx = self.nodes.borrow().len();
+        self.nodes
+            .borrow_mut()
+            .push(Rc::new(Ui::FixedSizedBox(obj)));
         UiNodeId(idx)
     }
 
-    pub fn textured_rectangle(&mut self, texture_id: TextureId) -> UiNodeId {
+    pub fn textured_rectangle(&self, texture_id: TextureId) -> UiNodeId {
         let obj = TexturedRectangle {
             texture_id,
             tint: Color::new(255, 255, 255, 255),
         };
-        let idx = self.nodes.len();
-        self.nodes.push(Ui::TexturedRectangle(obj));
+        let idx = self.nodes.borrow().len();
+        self.nodes
+            .borrow_mut()
+            .push(Rc::new(Ui::TexturedRectangle(obj)));
         UiNodeId(idx)
     }
 
-    pub fn textured_rectangle_tinted(&mut self, texture_id: TextureId, tint: Color) -> UiNodeId {
+    pub fn textured_rectangle_tinted(&self, texture_id: TextureId, tint: Color) -> UiNodeId {
         let obj = TexturedRectangle { texture_id, tint };
-        let idx = self.nodes.len();
-        self.nodes.push(Ui::TexturedRectangle(obj));
+        let idx = self.nodes.borrow().len();
+        self.nodes
+            .borrow_mut()
+            .push(Rc::new(Ui::TexturedRectangle(obj)));
         UiNodeId(idx)
     }
 
-    pub fn rectangle(&mut self, color: Color) -> UiNodeId {
+    pub fn rectangle(&self, color: Color) -> UiNodeId {
         let obj = Rectangle { color };
-        let idx = self.nodes.len();
-        self.nodes.push(Ui::Rectangle(obj));
+        let idx = self.nodes.borrow().len();
+        self.nodes.borrow_mut().push(Rc::new(Ui::Rectangle(obj)));
         UiNodeId(idx)
     }
 
     pub fn text_details(
-        &mut self,
+        &self,
         text: Rc<str>,
         font_size: f32,
         text_color: Color,
@@ -364,22 +370,22 @@ impl Scene {
             background_color,
             align,
         };
-        let idx = self.nodes.len();
-        self.nodes.push(Ui::Text(obj));
+        let idx = self.nodes.borrow().len();
+        self.nodes.borrow_mut().push(Rc::new(Ui::Text(obj)));
         UiNodeId(idx)
     }
 
-    pub fn hbox(&mut self, elements: Vec<UiNodeId>) -> UiNodeId {
+    pub fn hbox(&self, elements: Vec<UiNodeId>) -> UiNodeId {
         let obj = Hbox { elements };
-        let idx = self.nodes.len();
-        self.nodes.push(Ui::Hbox(obj));
+        let idx = self.nodes.borrow().len();
+        self.nodes.borrow_mut().push(Rc::new(Ui::Hbox(obj)));
         UiNodeId(idx)
     }
 
-    pub fn vbox(&mut self, elements: Vec<UiNodeId>) -> UiNodeId {
+    pub fn vbox(&self, elements: Vec<UiNodeId>) -> UiNodeId {
         let obj = Vbox { elements };
-        let idx = self.nodes.len();
-        self.nodes.push(Ui::Vbox(obj));
+        let idx = self.nodes.borrow().len();
+        self.nodes.borrow_mut().push(Rc::new(Ui::Vbox(obj)));
         UiNodeId(idx)
     }
 
@@ -387,8 +393,8 @@ impl Scene {
         self.cursor_pos = (cx, cy);
     }
 
-    fn node(&self, id: UiNodeId) -> &Ui {
-        &self.nodes[id.0]
+    fn node(&self, id: UiNodeId) -> Rc<Ui> {
+        self.nodes.borrow()[id.0].clone()
     }
 }
 
