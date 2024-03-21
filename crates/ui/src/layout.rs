@@ -4,7 +4,11 @@ use crate::{
     texture_atlas::{TextureAtlas, TextureId},
 };
 use std::{cell::RefCell, rc::Rc};
-use winit::window::Window;
+use winit::{
+    event::{ElementState, KeyEvent},
+    keyboard::PhysicalKey,
+    window::Window,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub struct UiNodeId(usize);
@@ -76,12 +80,6 @@ impl TexturedRectangle {
     }
 }
 
-pub enum UiType {
-    CenteredBox,
-    Hbox,
-    Vbox,
-}
-
 #[derive(Debug)]
 pub struct FixedSizedBox {
     width: f32,
@@ -131,7 +129,7 @@ pub enum TextAlign {
 
 #[derive(Debug)]
 pub struct TextDetails {
-    text: Rc<str>,
+    text: Rc<RefCell<String>>,
     font_size: f32,
     text_color: Color,
     background_color: Color,
@@ -156,7 +154,7 @@ impl TextDetails {
         match self.align {
             TextAlign::Left => drawables.extend(image_pipeline::layout_text(
                 view_size,
-                &self.text,
+                self.text.clone(),
                 atlas,
                 self.font_size,
                 queue,
@@ -164,7 +162,7 @@ impl TextDetails {
             )),
             TextAlign::Center => drawables.extend(image_pipeline::layout_text_centered(
                 view_size,
-                &self.text,
+                self.text.clone(),
                 atlas,
                 self.font_size,
                 queue,
@@ -272,19 +270,86 @@ pub struct Scene {
     nodes: RefCell<Vec<Rc<Ui>>>,
     node_root: UiNodeId,
     cursor_pos: (f32, f32),
+    focused: Option<UiNodeId>,
 }
 
-impl Scene {
-    pub fn new() -> Self {
+impl Default for Scene {
+    fn default() -> Self {
         Self {
             nodes: RefCell::new(vec![]),
             node_root: UiNodeId(0),
             cursor_pos: (0.0, 0.0),
+            focused: None,
         }
+    }
+}
+
+impl Scene {
+    pub fn set_focus(&mut self, node: UiNodeId) {
+        self.focused = Some(node);
     }
 
     pub fn set_root(&mut self, root: UiNodeId) {
         self.node_root = root;
+    }
+
+    pub fn send_keystroke(&mut self, event: &KeyEvent) {
+        if let Some(focused) = self.focused {
+            match self.node(focused).as_ref() {
+                Ui::Text(td) => {
+                    if event.state == ElementState::Pressed {
+                        match event.physical_key {
+                            PhysicalKey::Code(c) => {
+                                let mut other_action = false;
+
+                                let ch = match c {
+                                    winit::keyboard::KeyCode::KeyA => 'a',
+                                    winit::keyboard::KeyCode::KeyB => 'b',
+                                    winit::keyboard::KeyCode::KeyC => 'c',
+                                    winit::keyboard::KeyCode::KeyD => 'd',
+                                    winit::keyboard::KeyCode::KeyE => 'e',
+                                    winit::keyboard::KeyCode::KeyF => 'f',
+                                    winit::keyboard::KeyCode::KeyG => 'g',
+                                    winit::keyboard::KeyCode::KeyH => 'h',
+                                    winit::keyboard::KeyCode::KeyI => 'i',
+                                    winit::keyboard::KeyCode::KeyJ => 'j',
+                                    winit::keyboard::KeyCode::KeyK => 'k',
+                                    winit::keyboard::KeyCode::KeyL => 'l',
+                                    winit::keyboard::KeyCode::KeyM => 'm',
+                                    winit::keyboard::KeyCode::KeyN => 'n',
+                                    winit::keyboard::KeyCode::KeyO => 'o',
+                                    winit::keyboard::KeyCode::KeyP => 'p',
+                                    winit::keyboard::KeyCode::KeyQ => 'q',
+                                    winit::keyboard::KeyCode::KeyR => 'r',
+                                    winit::keyboard::KeyCode::KeyS => 's',
+                                    winit::keyboard::KeyCode::KeyT => 't',
+                                    winit::keyboard::KeyCode::KeyU => 'u',
+                                    winit::keyboard::KeyCode::KeyV => 'v',
+                                    winit::keyboard::KeyCode::KeyW => 'w',
+                                    winit::keyboard::KeyCode::KeyX => 'x',
+                                    winit::keyboard::KeyCode::KeyY => 'y',
+                                    winit::keyboard::KeyCode::KeyZ => 'z',
+                                    winit::keyboard::KeyCode::Space => ' ',
+                                    winit::keyboard::KeyCode::Backspace => {
+                                        other_action = true;
+                                        td.text.borrow_mut().pop();
+                                        ' '
+                                    }
+                                    _ => return,
+                                };
+
+                                if !other_action {
+                                    td.text.borrow_mut().push(ch);
+                                }
+                            }
+                            _ => todo!(),
+                        }
+                    }
+                }
+
+                _ => todo!(),
+            }
+        }
     }
 
     pub fn layout(
@@ -357,14 +422,14 @@ impl Scene {
 
     pub fn text_details(
         &self,
-        text: Rc<str>,
+        text: String,
         font_size: f32,
         text_color: Color,
         background_color: Color,
         align: TextAlign,
     ) -> UiNodeId {
         let obj = TextDetails {
-            text,
+            text: Rc::new(RefCell::new(text)),
             font_size,
             text_color,
             background_color,

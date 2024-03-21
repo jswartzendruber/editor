@@ -69,7 +69,7 @@ impl<'window> State<'window> {
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::Fifo,
-            desired_maximum_frame_latency: 2,
+            desired_maximum_frame_latency: 1,
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
             view_formats: vec![],
         };
@@ -95,7 +95,16 @@ impl<'window> State<'window> {
         let quad_pipeline = QuadPipeline::new(&device, camera_uniform.clone());
         let image_pipeline = ImagePipeline::new(&device, camera_uniform.clone(), &atlas);
 
-        let mut scene = Scene::new();
+        let mut scene = Scene::default();
+
+        let td = scene.text_details(
+            String::from("text wrapping demo! text wrapping demo! text wrapping demo!"),
+            24.0,
+            Color::new(255, 0, 0, 255),
+            Color::new(10, 10, 10, 255),
+            TextAlign::Left,
+        );
+        scene.set_focus(td);
 
         let root = scene.hbox(vec![
             scene.vbox(vec![
@@ -105,24 +114,13 @@ impl<'window> State<'window> {
             ]),
             scene.vbox(vec![
                 scene.text_details(
-                    Rc::from("This text wraps and resizes with the parent's bounding box!"),
+                    String::from("This text wraps and resizes with the parent's bounding box!"),
                     24.0,
                     Color::new(255, 0, 0, 255),
                     Color::new(10, 10, 10, 255),
                     TextAlign::Left,
                 ),
-                scene.fixed_size_bbox(
-                    400.0,
-                    200.0,
-                    scene.text_details(
-                        Rc::from("text wrapping demo! text wrapping demo! text wrapping demo!"),
-                        24.0,
-                        Color::new(255, 0, 0, 255),
-                        Color::new(10, 10, 10, 255),
-                        TextAlign::Left,
-                    ),
-                    Color::new(5, 5, 5, 255),
-                ),
+                scene.fixed_size_bbox(400.0, 200.0, td, Color::new(5, 5, 5, 255)),
             ]),
             scene.vbox(vec![
                 scene.textured_rectangle(hello_atlas_idx),
@@ -169,7 +167,7 @@ impl<'window> State<'window> {
             &mut self.atlas,
             (self.config.width as f32, self.config.height as f32),
             &self.queue,
-            &self.window,
+            self.window,
         );
 
         let quad_instances = self.quad_pipeline.instances();
@@ -253,12 +251,13 @@ impl<'window> State<'window> {
                     | WindowEvent::KeyboardInput {
                         event:
                             KeyEvent {
-                                physical_key: PhysicalKey::Code(KeyCode::Space),
+                                physical_key: PhysicalKey::Code(KeyCode::Escape),
                                 state: ElementState::Pressed,
                                 ..
                             },
                         ..
                     } => elwt.exit(),
+                    WindowEvent::KeyboardInput { event, .. } => self.scene.send_keystroke(event),
                     _ => {}
                 },
                 _ => {}

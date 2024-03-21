@@ -8,7 +8,7 @@ use wgpu::util::DeviceExt;
 
 pub fn layout_text(
     area: BoundingBox,
-    text: &Rc<str>,
+    text: Rc<RefCell<String>>,
     atlas: &mut TextureAtlas,
     font_size: f32,
     queue: &wgpu::Queue,
@@ -20,7 +20,7 @@ pub fn layout_text(
     let mut baseline = area.top_left();
     baseline.1 += line_height;
 
-    for c in text.chars() {
+    for c in text.borrow().chars() {
         let glyph = atlas.map_get_or_insert_glyph(c, font_size, queue).unwrap();
         let metrics = glyph.metrics;
 
@@ -52,7 +52,7 @@ pub fn layout_text(
 
 pub fn layout_text_centered(
     area: BoundingBox,
-    text: &Rc<str>,
+    text: Rc<RefCell<String>>,
     atlas: &mut TextureAtlas,
     font_size: f32,
     queue: &wgpu::Queue,
@@ -67,7 +67,7 @@ pub fn layout_text_centered(
     let mut line_start = baseline;
     let mut lines = 0;
     let mut line_info = vec![];
-    for c in text.chars() {
+    for c in text.borrow().chars() {
         let glyph = atlas.map_get_or_insert_glyph(c, font_size, queue).unwrap();
         let metrics = glyph.metrics;
 
@@ -97,15 +97,15 @@ pub fn layout_text_centered(
     line_info.push((line_start, line_end));
     lines += 1;
 
-    for line in 0..lines {
-        let (line_start, line_end) = line_info[line];
+    for line in line_info {
+        let (line_start, line_end) = line;
         let text_width = line_end.0 - line_start.0;
         let mut baseline = (
             area.top_left().0 + (area.width() / 2.0) - (text_width / 2.0),
             area.top_left().1 + (area.height() / 2.0) - ((line_height * (lines - 1) as f32) / 2.0),
         );
 
-        for c in text.chars() {
+        for c in text.borrow().chars() {
             let glyph = atlas.map_get_or_insert_glyph(c, font_size, queue).unwrap();
             let metrics = glyph.metrics;
 
