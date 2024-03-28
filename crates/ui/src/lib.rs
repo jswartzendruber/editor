@@ -82,15 +82,7 @@ impl<'window> State<'window> {
             0,
         )));
 
-        let mut atlas = TextureAtlas::new(&device, &queue, 1024);
-        let bamboo_atlas_idx = atlas
-            .load_image_from_file(&queue, "res/bamboo.png")
-            .unwrap();
-        let tree_atlas_idx = atlas
-            .load_image_from_file(&queue, "res/happy-tree.png")
-            .unwrap();
-        let hello_atlas_idx = atlas.load_image_from_file(&queue, "res/hello.png").unwrap();
-        let rect_atlas_idx = atlas.load_image_from_file(&queue, "res/rect.png").unwrap();
+        let atlas = TextureAtlas::new(&device, &queue, 1024);
 
         let quad_pipeline = QuadPipeline::new(&device, camera_uniform.clone());
         let image_pipeline = ImagePipeline::new(&device, camera_uniform.clone(), &atlas);
@@ -99,35 +91,14 @@ impl<'window> State<'window> {
 
         let td = scene.text_details(
             String::from("text wrapping demo! text wrapping demo! text wrapping demo!"),
-            24.0,
+            48.0,
             Color::new(255, 0, 0, 255),
             Color::new(10, 10, 10, 255),
             TextAlign::Left,
         );
         scene.set_focus(td);
 
-        let root = scene.hbox(vec![
-            scene.vbox(vec![
-                scene.textured_rectangle(bamboo_atlas_idx),
-                scene.rectangle(Color::new(0, 255, 0, 255)),
-                scene.textured_rectangle(tree_atlas_idx),
-            ]),
-            scene.vbox(vec![
-                scene.text_details(
-                    String::from("This text wraps and resizes with the parent's bounding box!"),
-                    24.0,
-                    Color::new(255, 0, 0, 255),
-                    Color::new(10, 10, 10, 255),
-                    TextAlign::Left,
-                ),
-                scene.fixed_size_bbox(400.0, 200.0, td, Color::new(5, 5, 5, 255)),
-            ]),
-            scene.vbox(vec![
-                scene.textured_rectangle(hello_atlas_idx),
-                scene.rectangle(Color::new(0, 0, 255, 255)),
-                scene.textured_rectangle(rect_atlas_idx),
-            ]),
-        ]);
+        let root = scene.hbox(vec![td]);
         scene.set_root(root);
 
         Self {
