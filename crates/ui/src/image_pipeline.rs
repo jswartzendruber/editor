@@ -1,6 +1,7 @@
 use crate::{
     camera_uniform::CameraUniform,
     layout::{BoundingBox, Color, Drawables},
+    quad_pipeline::QuadInstance,
     texture_atlas::{TextureAtlas, TextureId},
 };
 use std::{borrow::Cow, cell::RefCell, rc::Rc};
@@ -13,6 +14,8 @@ pub fn layout_text(
     font_size: f32,
     queue: &wgpu::Queue,
     font_color: &Color,
+    cursor_position: usize,
+    draw_cursor: bool,
 ) -> Vec<Drawables> {
     let mut drawables = vec![];
 
@@ -20,7 +23,9 @@ pub fn layout_text(
     let mut baseline = area.top_left();
     baseline.1 += line_height;
 
-    for c in text.borrow().chars() {
+    let mut drew_cursor = false;
+
+    for (i, c) in text.borrow().chars().enumerate() {
         let glyph = atlas.map_get_or_insert_glyph(c, font_size, queue).unwrap();
         let metrics = glyph.metrics;
 
@@ -35,6 +40,17 @@ pub fn layout_text(
             return drawables;
         }
 
+        if i == cursor_position && draw_cursor {
+            drew_cursor = true;
+            let cursor_height = (font_size * 0.85).floor();
+            let cursor_width = (font_size / 10.0).floor();
+            drawables.push(Drawables::Rect(QuadInstance {
+                position: [baseline.0, baseline.1 - cursor_height],
+                size: [cursor_width, cursor_height],
+                color: [1.0, 1.0, 1.0, 1.0],
+            }));
+        }
+
         drawables.push(Drawables::TexturedRect(ImageInstance::add_instance(
             atlas,
             glyph.texture_id,
@@ -47,6 +63,16 @@ pub fn layout_text(
         baseline.1 += metrics.advance.1;
     }
 
+    if !drew_cursor && draw_cursor {
+        let cursor_height = (font_size * 0.85).floor();
+        let cursor_width = (font_size / 8.5).floor();
+        drawables.push(Drawables::Rect(QuadInstance {
+            position: [baseline.0, baseline.1 - cursor_height],
+            size: [cursor_width, cursor_height],
+            color: [1.0, 1.0, 1.0, 1.0],
+        }));
+    }
+
     drawables
 }
 
@@ -57,6 +83,8 @@ pub fn layout_text_centered(
     font_size: f32,
     queue: &wgpu::Queue,
     font_color: &Color,
+    cursor_position: usize,
+    draw_cursor: bool,
 ) -> Vec<Drawables> {
     let mut drawables = vec![];
 
@@ -67,7 +95,7 @@ pub fn layout_text_centered(
     let mut line_start = baseline;
     let mut lines = 0;
     let mut line_info = vec![];
-    for c in text.borrow().chars() {
+    for (i, c) in text.borrow().chars().enumerate() {
         let glyph = atlas.map_get_or_insert_glyph(c, font_size, queue).unwrap();
         let metrics = glyph.metrics;
 
@@ -86,6 +114,16 @@ pub fn layout_text_centered(
         // Break early if we leave our box
         if !area.inside(baseline) {
             break;
+        }
+
+        if i == cursor_position {
+            let cursor_height = (font_size * 0.85).floor();
+            let cursor_width = (font_size / 10.0).floor();
+            drawables.push(Drawables::Rect(QuadInstance {
+                position: [baseline.0, baseline.1 - cursor_height],
+                size: [cursor_width, cursor_height],
+                color: [1.0, 1.0, 1.0, 1.0],
+            }));
         }
 
         baseline.0 += metrics.advance.0;

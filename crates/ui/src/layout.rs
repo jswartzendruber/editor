@@ -3,7 +3,11 @@ use crate::{
     quad_pipeline::QuadInstance,
     texture_atlas::{TextureAtlas, TextureId},
 };
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    time::{Duration, Instant},
+};
 use winit::{
     event::{ElementState, KeyEvent},
     keyboard::PhysicalKey,
@@ -134,6 +138,9 @@ pub struct TextDetails {
     text_color: Color,
     background_color: Color,
     align: TextAlign,
+    last_action: RefCell<Instant>,
+    last_cursor_blink: RefCell<Instant>,
+    cursor_position: RefCell<usize>,
 }
 
 impl TextDetails {
@@ -151,6 +158,27 @@ impl TextDetails {
             color: self.background_color.to_f32_arr(),
         }));
 
+        // Default cursor blink rate is 530ms. TIL
+        // Only blink cursor if there was no action in the last second
+        let draw_cursor = if Instant::now().duration_since(*self.last_action.borrow())
+            > Duration::from_millis(1060)
+        {
+            if Instant::now().duration_since(*self.last_cursor_blink.borrow())
+                > Duration::from_millis(530)
+            {
+                if Instant::now().duration_since(*self.last_cursor_blink.borrow())
+                    > Duration::from_millis(1060)
+                {
+                    *self.last_cursor_blink.borrow_mut() = Instant::now();
+                }
+                true
+            } else {
+                false
+            }
+        } else {
+            true
+        };
+
         match self.align {
             TextAlign::Left => drawables.extend(image_pipeline::layout_text(
                 view_size,
@@ -159,6 +187,8 @@ impl TextDetails {
                 self.font_size,
                 queue,
                 &self.text_color,
+                *self.cursor_position.borrow(),
+                draw_cursor,
             )),
             TextAlign::Center => drawables.extend(image_pipeline::layout_text_centered(
                 view_size,
@@ -167,8 +197,20 @@ impl TextDetails {
                 self.font_size,
                 queue,
                 &self.text_color,
+                *self.cursor_position.borrow(),
+                draw_cursor,
             )),
         }
+    }
+
+    pub fn pop(&self) {
+        self.text.borrow_mut().pop();
+        *self.cursor_position.borrow_mut() -= 1;
+    }
+
+    pub fn add_char(&self, c: char) {
+        self.text.borrow_mut().push(c);
+        *self.cursor_position.borrow_mut() += 1;
     }
 }
 
@@ -332,14 +374,15 @@ impl Scene {
                                     winit::keyboard::KeyCode::Space => ' ',
                                     winit::keyboard::KeyCode::Backspace => {
                                         other_action = true;
-                                        td.text.borrow_mut().pop();
+                                        td.pop();
                                         ' '
                                     }
                                     _ => return,
                                 };
 
+                                *td.last_action.borrow_mut() = Instant::now();
                                 if !other_action {
-                                    td.text.borrow_mut().push(ch);
+                                    td.add_char(ch);
                                 }
                             }
                             _ => todo!(),
@@ -428,12 +471,16 @@ impl Scene {
         background_color: Color,
         align: TextAlign,
     ) -> UiNodeId {
+        let cursor_position = RefCell::new(text.len());
         let obj = TextDetails {
             text: Rc::new(RefCell::new(text)),
             font_size,
             text_color,
             background_color,
             align,
+            last_cursor_blink: RefCell::new(Instant::now()),
+            last_action: RefCell::new(Instant::now()),
+            cursor_position,
         };
         let idx = self.nodes.borrow().len();
         self.nodes.borrow_mut().push(Rc::new(Ui::Text(obj)));
