@@ -138,14 +138,14 @@ pub struct TextDetails {
     text_color: Color,
     background_color: Color,
     align: TextAlign,
-    last_action: RefCell<Instant>,
-    last_cursor_blink: RefCell<Instant>,
-    cursor_position: RefCell<usize>,
+    last_action: Instant,
+    last_cursor_blink: Instant,
+    cursor_position: usize,
 }
 
 impl TextDetails {
     fn layout(
-        &self,
+        &mut self,
         atlas: &mut TextureAtlas,
         view_size: BoundingBox,
         queue: &wgpu::Queue,
@@ -160,16 +160,14 @@ impl TextDetails {
 
         // Default cursor blink rate is 530ms. TIL
         // Only blink cursor if there was no action in the last second
-        let draw_cursor = if Instant::now().duration_since(*self.last_action.borrow())
+        let draw_cursor = if Instant::now().duration_since(self.last_action)
             > Duration::from_millis(1060)
         {
-            if Instant::now().duration_since(*self.last_cursor_blink.borrow())
-                > Duration::from_millis(530)
-            {
-                if Instant::now().duration_since(*self.last_cursor_blink.borrow())
+            if Instant::now().duration_since(self.last_cursor_blink) > Duration::from_millis(530) {
+                if Instant::now().duration_since(self.last_cursor_blink)
                     > Duration::from_millis(1060)
                 {
-                    *self.last_cursor_blink.borrow_mut() = Instant::now();
+                    self.last_cursor_blink = Instant::now();
                 }
                 true
             } else {
@@ -187,7 +185,7 @@ impl TextDetails {
                 self.font_size,
                 queue,
                 &self.text_color,
-                *self.cursor_position.borrow(),
+                self.cursor_position,
                 draw_cursor,
             )),
             TextAlign::Center => drawables.extend(image_pipeline::layout_text_centered(
@@ -197,20 +195,20 @@ impl TextDetails {
                 self.font_size,
                 queue,
                 &self.text_color,
-                *self.cursor_position.borrow(),
+                self.cursor_position,
                 draw_cursor,
             )),
         }
     }
 
-    pub fn pop(&self) {
+    pub fn pop(&mut self) {
         self.text.borrow_mut().pop();
-        *self.cursor_position.borrow_mut() -= 1;
+        self.cursor_position -= 1;
     }
 
-    pub fn add_char(&self, c: char) {
+    pub fn add_char(&mut self, c: char) {
         self.text.borrow_mut().push(c);
-        *self.cursor_position.borrow_mut() += 1;
+        self.cursor_position += 1;
     }
 }
 
@@ -279,7 +277,7 @@ pub enum Ui {
     TexturedRectangle(TexturedRectangle),
     FixedSizedBox(FixedSizedBox),
     Rectangle(Rectangle),
-    Text(TextDetails),
+    Text(RefCell<TextDetails>),
     Hbox(Hbox),
     Vbox(Vbox),
     Spacer,
@@ -299,7 +297,7 @@ impl Ui {
             Ui::TexturedRectangle(tr) => tr.layout(atlas, view_size, drawables),
             Ui::FixedSizedBox(fsb) => fsb.layout(scene, atlas, view_size, queue, window, drawables),
             Ui::Rectangle(r) => r.layout(view_size, drawables),
-            Ui::Text(td) => td.layout(atlas, view_size, queue, drawables),
+            Ui::Text(td) => td.borrow_mut().layout(atlas, view_size, queue, drawables),
             Ui::Hbox(h) => h.layout(scene, atlas, view_size, queue, window, drawables),
             Ui::Vbox(v) => v.layout(scene, atlas, view_size, queue, window, drawables),
             Ui::Spacer => {}
@@ -339,6 +337,7 @@ impl Scene {
         if let Some(focused) = self.focused {
             match self.node(focused).as_ref() {
                 Ui::Text(td) => {
+                    let mut td = td.borrow_mut();
                     if event.state == ElementState::Pressed {
                         match event.physical_key {
                             PhysicalKey::Code(c) => {
@@ -380,7 +379,7 @@ impl Scene {
                                     _ => return,
                                 };
 
-                                *td.last_action.borrow_mut() = Instant::now();
+                                td.last_action = Instant::now();
                                 if !other_action {
                                     td.add_char(ch);
                                 }
@@ -471,19 +470,21 @@ impl Scene {
         background_color: Color,
         align: TextAlign,
     ) -> UiNodeId {
-        let cursor_position = RefCell::new(text.len());
+        let cursor_position = text.len();
         let obj = TextDetails {
             text: Rc::new(RefCell::new(text)),
             font_size,
             text_color,
             background_color,
             align,
-            last_cursor_blink: RefCell::new(Instant::now()),
-            last_action: RefCell::new(Instant::now()),
+            last_cursor_blink: Instant::now(),
+            last_action: Instant::now(),
             cursor_position,
         };
         let idx = self.nodes.borrow().len();
-        self.nodes.borrow_mut().push(Rc::new(Ui::Text(obj)));
+        self.nodes
+            .borrow_mut()
+            .push(Rc::new(Ui::Text(RefCell::new(obj))));
         UiNodeId(idx)
     }
 
