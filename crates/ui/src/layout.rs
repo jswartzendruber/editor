@@ -10,7 +10,7 @@ use std::{
 };
 use winit::{
     event::{ElementState, KeyEvent},
-    keyboard::PhysicalKey,
+    keyboard::{KeyCode, PhysicalKey},
     window::Window,
 };
 
@@ -126,18 +126,11 @@ impl FixedSizedBox {
 }
 
 #[derive(Debug)]
-pub enum TextAlign {
-    Left,
-    Center,
-}
-
-#[derive(Debug)]
 pub struct TextDetails {
     text: Rc<RefCell<String>>,
     font_size: f32,
     text_color: Color,
     background_color: Color,
-    align: TextAlign,
     last_action: Instant,
     last_cursor_blink: Instant,
     cursor_position: usize,
@@ -177,33 +170,28 @@ impl TextDetails {
             true
         };
 
-        match self.align {
-            TextAlign::Left => drawables.extend(image_pipeline::layout_text(
-                view_size,
-                self.text.clone(),
-                atlas,
-                self.font_size,
-                queue,
-                &self.text_color,
-                self.cursor_position,
-                draw_cursor,
-            )),
-            TextAlign::Center => drawables.extend(image_pipeline::layout_text_centered(
-                view_size,
-                self.text.clone(),
-                atlas,
-                self.font_size,
-                queue,
-                &self.text_color,
-                self.cursor_position,
-                draw_cursor,
-            )),
-        }
+        drawables.extend(image_pipeline::layout_text(
+            view_size,
+            self.text.clone(),
+            atlas,
+            self.font_size,
+            queue,
+            &self.text_color,
+            self.cursor_position,
+            draw_cursor,
+        ));
     }
 
-    pub fn pop(&mut self) {
+    pub fn backspace(&mut self) {
         self.text.borrow_mut().pop();
         self.cursor_position -= 1;
+    }
+
+    pub fn delete(&mut self) {
+        todo!()
+        // self.text
+        //     .borrow_mut()
+        //     .replace_range(self.cursor_position..self.cursor_position + 1, "");
     }
 
     pub fn add_char(&mut self, c: char) {
@@ -344,38 +332,76 @@ impl Scene {
                                 let mut other_action = false;
 
                                 let ch = match c {
-                                    winit::keyboard::KeyCode::KeyA => 'a',
-                                    winit::keyboard::KeyCode::KeyB => 'b',
-                                    winit::keyboard::KeyCode::KeyC => 'c',
-                                    winit::keyboard::KeyCode::KeyD => 'd',
-                                    winit::keyboard::KeyCode::KeyE => 'e',
-                                    winit::keyboard::KeyCode::KeyF => 'f',
-                                    winit::keyboard::KeyCode::KeyG => 'g',
-                                    winit::keyboard::KeyCode::KeyH => 'h',
-                                    winit::keyboard::KeyCode::KeyI => 'i',
-                                    winit::keyboard::KeyCode::KeyJ => 'j',
-                                    winit::keyboard::KeyCode::KeyK => 'k',
-                                    winit::keyboard::KeyCode::KeyL => 'l',
-                                    winit::keyboard::KeyCode::KeyM => 'm',
-                                    winit::keyboard::KeyCode::KeyN => 'n',
-                                    winit::keyboard::KeyCode::KeyO => 'o',
-                                    winit::keyboard::KeyCode::KeyP => 'p',
-                                    winit::keyboard::KeyCode::KeyQ => 'q',
-                                    winit::keyboard::KeyCode::KeyR => 'r',
-                                    winit::keyboard::KeyCode::KeyS => 's',
-                                    winit::keyboard::KeyCode::KeyT => 't',
-                                    winit::keyboard::KeyCode::KeyU => 'u',
-                                    winit::keyboard::KeyCode::KeyV => 'v',
-                                    winit::keyboard::KeyCode::KeyW => 'w',
-                                    winit::keyboard::KeyCode::KeyX => 'x',
-                                    winit::keyboard::KeyCode::KeyY => 'y',
-                                    winit::keyboard::KeyCode::KeyZ => 'z',
-                                    winit::keyboard::KeyCode::Space => ' ',
-                                    winit::keyboard::KeyCode::Backspace => {
+                                    KeyCode::KeyA => 'a',
+                                    KeyCode::KeyB => 'b',
+                                    KeyCode::KeyC => 'c',
+                                    KeyCode::KeyD => 'd',
+                                    KeyCode::KeyE => 'e',
+                                    KeyCode::KeyF => 'f',
+                                    KeyCode::KeyG => 'g',
+                                    KeyCode::KeyH => 'h',
+                                    KeyCode::KeyI => 'i',
+                                    KeyCode::KeyJ => 'j',
+                                    KeyCode::KeyK => 'k',
+                                    KeyCode::KeyL => 'l',
+                                    KeyCode::KeyM => 'm',
+                                    KeyCode::KeyN => 'n',
+                                    KeyCode::KeyO => 'o',
+                                    KeyCode::KeyP => 'p',
+                                    KeyCode::KeyQ => 'q',
+                                    KeyCode::KeyR => 'r',
+                                    KeyCode::KeyS => 's',
+                                    KeyCode::KeyT => 't',
+                                    KeyCode::KeyU => 'u',
+                                    KeyCode::KeyV => 'v',
+                                    KeyCode::KeyW => 'w',
+                                    KeyCode::KeyX => 'x',
+                                    KeyCode::KeyY => 'y',
+                                    KeyCode::KeyZ => 'z',
+                                    KeyCode::Space => ' ',
+                                    KeyCode::Enter => '\n',
+                                    KeyCode::Backquote => '`',
+                                    KeyCode::Backslash => '\\',
+                                    KeyCode::BracketLeft => '[',
+                                    KeyCode::BracketRight => ']',
+                                    KeyCode::Comma => ',',
+                                    KeyCode::Digit0 => '0',
+                                    KeyCode::Digit1 => '1',
+                                    KeyCode::Digit2 => '2',
+                                    KeyCode::Digit3 => '3',
+                                    KeyCode::Digit4 => '4',
+                                    KeyCode::Digit5 => '5',
+                                    KeyCode::Digit6 => '6',
+                                    KeyCode::Digit7 => '7',
+                                    KeyCode::Digit8 => '8',
+                                    KeyCode::Digit9 => '9',
+                                    KeyCode::Equal => '=',
+                                    KeyCode::Minus => '-',
+                                    KeyCode::Period => '.',
+                                    KeyCode::Quote => '"',
+                                    KeyCode::Semicolon => ';',
+                                    KeyCode::Slash => '/',
+                                    KeyCode::Tab => '\t',
+                                    KeyCode::Delete => {
                                         other_action = true;
-                                        td.pop();
+                                        td.delete();
                                         ' '
                                     }
+                                    KeyCode::Backspace => {
+                                        other_action = true;
+                                        td.backspace();
+                                        ' '
+                                    }
+                                    // KeyCode::ArrowLeft => {
+                                    //     td.cursor_position -= 1;
+                                    //     ' '
+                                    // }
+                                    // KeyCode::ArrowRight => {
+                                    //     if td.cursor_position < td.text.borrow().len() {
+                                    //         td.cursor_position += 1;
+                                    //     }
+                                    //     ' '
+                                    // }
                                     _ => return,
                                 };
 
@@ -468,7 +494,6 @@ impl Scene {
         font_size: f32,
         text_color: Color,
         background_color: Color,
-        align: TextAlign,
     ) -> UiNodeId {
         let cursor_position = text.len();
         let obj = TextDetails {
@@ -476,7 +501,6 @@ impl Scene {
             font_size,
             text_color,
             background_color,
-            align,
             last_cursor_blink: Instant::now(),
             last_action: Instant::now(),
             cursor_position,

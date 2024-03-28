@@ -7,9 +7,9 @@ pub mod texture_atlas;
 
 use camera_uniform::CameraUniform;
 use image_pipeline::ImagePipeline;
-use layout::{Color, Scene, TextAlign};
+use layout::{Color, Scene};
 use quad_pipeline::QuadPipeline;
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, io::Read, rc::Rc};
 use texture_atlas::TextureAtlas;
 use wgpu::Surface;
 use winit::{
@@ -37,7 +37,7 @@ struct State<'window> {
 }
 
 impl<'window> State<'window> {
-    fn new(window: &'window Window) -> State<'window> {
+    fn new(window: &'window Window, file_to_open: Option<String>) -> State<'window> {
         let mut size = window.inner_size();
         size.width = size.width.max(1);
         size.height = size.height.max(1);
@@ -89,12 +89,20 @@ impl<'window> State<'window> {
 
         let mut scene = Scene::default();
 
+        let file_contents = if let Some(file_name) = file_to_open {
+            let mut file = std::fs::File::open(file_name).unwrap();
+            let mut buf = String::new();
+            file.read_to_string(&mut buf).unwrap();
+            buf
+        } else {
+            String::from("")
+        };
+
         let td = scene.text_details(
-            String::from("text wrapping demo! text wrapping demo! text wrapping demo!"),
-            48.0,
-            Color::new(255, 0, 0, 255),
-            Color::new(10, 10, 10, 255),
-            TextAlign::Left,
+            file_contents,
+            16.0,
+            Color::new(255, 255, 255, 255),
+            Color::new(5, 5, 5, 255),
         );
         scene.set_focus(td);
 
@@ -237,13 +245,13 @@ impl<'window> State<'window> {
     }
 }
 
-pub fn run() {
+pub fn run(file_to_open: Option<String>) {
     let event_loop = EventLoop::new().unwrap();
     let window = WindowBuilder::new()
         .with_inner_size(PhysicalSize::new(1360, 720))
         .with_title("WGPU")
         .build(&event_loop)
         .unwrap();
-    let mut state = State::new(&window);
+    let mut state = State::new(&window, file_to_open);
     state.run(event_loop);
 }
