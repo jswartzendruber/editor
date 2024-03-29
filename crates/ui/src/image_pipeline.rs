@@ -4,12 +4,13 @@ use crate::{
     quad_pipeline::QuadInstance,
     texture_atlas::{TextureAtlas, TextureId},
 };
+use crop::Rope;
 use std::{borrow::Cow, cell::RefCell, rc::Rc};
 use wgpu::util::DeviceExt;
 
 pub fn layout_text(
     area: BoundingBox,
-    text: Rc<RefCell<String>>,
+    text: Rope,
     atlas: &mut TextureAtlas,
     font_size: f32,
     queue: &wgpu::Queue,
@@ -25,7 +26,7 @@ pub fn layout_text(
 
     let mut drew_cursor = false;
 
-    for (i, c) in text.borrow().chars().enumerate() {
+    for (i, c) in text.chars().enumerate() {
         let glyph = atlas.map_get_or_insert_glyph(c, font_size, queue).unwrap();
         let metrics = glyph.metrics;
 
