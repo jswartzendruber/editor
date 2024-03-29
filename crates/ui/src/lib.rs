@@ -220,6 +220,9 @@ impl<'window> State<'window> {
                         self.update();
                         self.draw();
                     }
+                    WindowEvent::MouseWheel { delta, .. } => {
+                        self.scene.scroll(*delta);
+                    }
                     WindowEvent::CursorMoved {
                         device_id: _,
                         position,

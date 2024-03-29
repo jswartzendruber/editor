@@ -17,6 +17,7 @@ pub fn layout_text(
     font_color: &Color,
     cursor_position: usize,
     draw_cursor: bool,
+    text_start_line: usize,
 ) -> Vec<Drawables> {
     let mut drawables = vec![];
 
@@ -26,7 +27,9 @@ pub fn layout_text(
 
     let mut drew_cursor = false;
 
-    for (i, c) in text.chars().enumerate() {
+    let text_start = text.byte_slice(text.byte_of_line(text_start_line)..);
+
+    for (i, c) in text_start.chars().enumerate() {
         let glyph = atlas.map_get_or_insert_glyph(c, font_size, queue).unwrap();
         let metrics = glyph.metrics;
 

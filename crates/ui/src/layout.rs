@@ -10,7 +10,7 @@ use std::{
     time::{Duration, Instant},
 };
 use winit::{
-    event::{ElementState, KeyEvent},
+    event::{ElementState, KeyEvent, MouseScrollDelta},
     keyboard::{KeyCode, PhysicalKey},
     window::Window,
 };
@@ -127,17 +127,31 @@ impl FixedSizedBox {
 }
 
 #[derive(Debug)]
-pub struct TextDetails {
+pub struct TextEditor {
+    /// Contains all of the text within this text editor.
     text: Rope,
+
     font_size: f32,
     text_color: Color,
     background_color: Color,
+
+    /// The last time something was entered in the text editor. Used to see if
+    /// we should keep the cursor visible or allow it to blink.
     last_action: Instant,
+
+    /// The last time the cursor blinked. Used to alternate drawing the cursor
+    /// and create the blinking effect.
     last_cursor_blink: Instant,
+
+    /// The current position of the cursor in the text rope.
     cursor_position: usize,
+
+    /// This is the line number of the text rope that will be displayed. Anything
+    /// above this number will not be rendered.
+    text_start_line: usize,
 }
 
-impl TextDetails {
+impl TextEditor {
     fn layout(
         &mut self,
         atlas: &mut TextureAtlas,
@@ -180,6 +194,7 @@ impl TextDetails {
             &self.text_color,
             self.cursor_position,
             draw_cursor,
+            self.text_start_line,
         ));
     }
 
@@ -199,6 +214,26 @@ impl TextDetails {
     pub fn add_char(&mut self, c: &str) {
         self.text.insert(self.cursor_position, c);
         self.cursor_position += 1;
+    }
+
+    /// Scrolls the text viewport 'scroll_lines' at a time.
+    pub fn scroll(&mut self, delta: MouseScrollDelta, scroll_lines: usize) {
+        match delta {
+            MouseScrollDelta::LineDelta(_, y) => {
+                if y > 0.0 {
+                    // Scroll up
+                    if self.text_start_line.saturating_sub(scroll_lines) > 0 {
+                        self.text_start_line -= scroll_lines;
+                    }
+                } else {
+                    // Scroll down
+                    if self.text_start_line + scroll_lines < self.text.line_len() {
+                        self.text_start_line += scroll_lines;
+                    }
+                }
+            }
+            MouseScrollDelta::PixelDelta(_) => todo!(),
+        }
     }
 }
 
@@ -267,7 +302,7 @@ pub enum Ui {
     TexturedRectangle(TexturedRectangle),
     FixedSizedBox(FixedSizedBox),
     Rectangle(Rectangle),
-    Text(RefCell<TextDetails>),
+    Text(RefCell<TextEditor>),
     Hbox(Hbox),
     Vbox(Vbox),
     Spacer,
@@ -323,101 +358,105 @@ impl Scene {
         self.node_root = root;
     }
 
+    pub fn scroll(&self, delta: MouseScrollDelta) {
+        if let Some(focused) = self.focused {
+            if let Ui::Text(td) = self.node(focused).as_ref() {
+                td.borrow_mut().scroll(delta, 2);
+            }
+        }
+    }
+
     pub fn send_keystroke(&mut self, event: &KeyEvent) {
         if let Some(focused) = self.focused {
-            match self.node(focused).as_ref() {
-                Ui::Text(td) => {
-                    let mut td = td.borrow_mut();
-                    if event.state == ElementState::Pressed {
-                        match event.physical_key {
-                            PhysicalKey::Code(c) => {
-                                let mut other_action = false;
+            if let Ui::Text(td) = self.node(focused).as_ref() {
+                let mut td = td.borrow_mut();
+                if event.state == ElementState::Pressed {
+                    match event.physical_key {
+                        PhysicalKey::Code(c) => {
+                            let mut other_action = false;
 
-                                let ch = match c {
-                                    KeyCode::KeyA => "a",
-                                    KeyCode::KeyB => "b",
-                                    KeyCode::KeyC => "c",
-                                    KeyCode::KeyD => "d",
-                                    KeyCode::KeyE => "e",
-                                    KeyCode::KeyF => "f",
-                                    KeyCode::KeyG => "g",
-                                    KeyCode::KeyH => "h",
-                                    KeyCode::KeyI => "i",
-                                    KeyCode::KeyJ => "j",
-                                    KeyCode::KeyK => "k",
-                                    KeyCode::KeyL => "l",
-                                    KeyCode::KeyM => "m",
-                                    KeyCode::KeyN => "n",
-                                    KeyCode::KeyO => "o",
-                                    KeyCode::KeyP => "p",
-                                    KeyCode::KeyQ => "q",
-                                    KeyCode::KeyR => "r",
-                                    KeyCode::KeyS => "s",
-                                    KeyCode::KeyT => "t",
-                                    KeyCode::KeyU => "u",
-                                    KeyCode::KeyV => "v",
-                                    KeyCode::KeyW => "w",
-                                    KeyCode::KeyX => "x",
-                                    KeyCode::KeyY => "y",
-                                    KeyCode::KeyZ => "z",
-                                    KeyCode::Space => " ",
-                                    KeyCode::Enter => "\n",
-                                    KeyCode::Backquote => "`",
-                                    KeyCode::Backslash => "\\",
-                                    KeyCode::BracketLeft => "[",
-                                    KeyCode::BracketRight => "]",
-                                    KeyCode::Comma => ",",
-                                    KeyCode::Digit0 => "0",
-                                    KeyCode::Digit1 => "1",
-                                    KeyCode::Digit2 => "2",
-                                    KeyCode::Digit3 => "3",
-                                    KeyCode::Digit4 => "4",
-                                    KeyCode::Digit5 => "5",
-                                    KeyCode::Digit6 => "6",
-                                    KeyCode::Digit7 => "7",
-                                    KeyCode::Digit8 => "8",
-                                    KeyCode::Digit9 => "9",
-                                    KeyCode::Equal => "=",
-                                    KeyCode::Minus => "-",
-                                    KeyCode::Period => ".",
-                                    KeyCode::Quote => "\"",
-                                    KeyCode::Semicolon => ";",
-                                    KeyCode::Slash => "/",
-                                    KeyCode::Tab => "\t",
-                                    KeyCode::Delete => {
-                                        other_action = true;
-                                        td.delete();
-                                        " "
-                                    }
-                                    KeyCode::Backspace => {
-                                        other_action = true;
-                                        td.backspace();
-                                        " "
-                                    }
-                                    // KeyCode::ArrowLeft => {
-                                    //     td.cursor_position -= 1;
-                                    //     " "
-                                    // }
-                                    // KeyCode::ArrowRight => {
-                                    //     if td.cursor_position < td.text.borrow().len() {
-                                    //         td.cursor_position += 1;
-                                    //     }
-                                    //     " "
-                                    // }
-                                    _ => return,
-                                };
-
-                                td.last_action = Instant::now();
-                                if !other_action {
-                                    td.add_char(ch);
+                            let ch = match c {
+                                KeyCode::KeyA => "a",
+                                KeyCode::KeyB => "b",
+                                KeyCode::KeyC => "c",
+                                KeyCode::KeyD => "d",
+                                KeyCode::KeyE => "e",
+                                KeyCode::KeyF => "f",
+                                KeyCode::KeyG => "g",
+                                KeyCode::KeyH => "h",
+                                KeyCode::KeyI => "i",
+                                KeyCode::KeyJ => "j",
+                                KeyCode::KeyK => "k",
+                                KeyCode::KeyL => "l",
+                                KeyCode::KeyM => "m",
+                                KeyCode::KeyN => "n",
+                                KeyCode::KeyO => "o",
+                                KeyCode::KeyP => "p",
+                                KeyCode::KeyQ => "q",
+                                KeyCode::KeyR => "r",
+                                KeyCode::KeyS => "s",
+                                KeyCode::KeyT => "t",
+                                KeyCode::KeyU => "u",
+                                KeyCode::KeyV => "v",
+                                KeyCode::KeyW => "w",
+                                KeyCode::KeyX => "x",
+                                KeyCode::KeyY => "y",
+                                KeyCode::KeyZ => "z",
+                                KeyCode::Space => " ",
+                                KeyCode::Enter => "\n",
+                                KeyCode::Backquote => "`",
+                                KeyCode::Backslash => "\\",
+                                KeyCode::BracketLeft => "[",
+                                KeyCode::BracketRight => "]",
+                                KeyCode::Comma => ",",
+                                KeyCode::Digit0 => "0",
+                                KeyCode::Digit1 => "1",
+                                KeyCode::Digit2 => "2",
+                                KeyCode::Digit3 => "3",
+                                KeyCode::Digit4 => "4",
+                                KeyCode::Digit5 => "5",
+                                KeyCode::Digit6 => "6",
+                                KeyCode::Digit7 => "7",
+                                KeyCode::Digit8 => "8",
+                                KeyCode::Digit9 => "9",
+                                KeyCode::Equal => "=",
+                                KeyCode::Minus => "-",
+                                KeyCode::Period => ".",
+                                KeyCode::Quote => "\"",
+                                KeyCode::Semicolon => ";",
+                                KeyCode::Slash => "/",
+                                KeyCode::Tab => "\t",
+                                KeyCode::Delete => {
+                                    other_action = true;
+                                    td.delete();
+                                    " "
                                 }
+                                KeyCode::Backspace => {
+                                    other_action = true;
+                                    td.backspace();
+                                    " "
+                                }
+                                // KeyCode::ArrowLeft => {
+                                //     td.cursor_position -= 1;
+                                //     " "
+                                // }
+                                // KeyCode::ArrowRight => {
+                                //     if td.cursor_position < td.text.borrow().len() {
+                                //         td.cursor_position += 1;
+                                //     }
+                                //     " "
+                                // }
+                                _ => return,
+                            };
+
+                            td.last_action = Instant::now();
+                            if !other_action {
+                                td.add_char(ch);
                             }
-                            _ => todo!(),
                         }
+                        _ => todo!(),
                     }
                 }
-
-                _ => todo!(),
             }
         }
     }
@@ -502,7 +541,7 @@ impl Scene {
 
         let text = builder.build();
         let cursor_position = text.byte_len();
-        let obj = TextDetails {
+        let obj = TextEditor {
             text,
             font_size,
             text_color,
@@ -510,6 +549,7 @@ impl Scene {
             last_cursor_blink: Instant::now(),
             last_action: Instant::now(),
             cursor_position,
+            text_start_line: 0,
         };
         let idx = self.nodes.borrow().len();
         self.nodes
