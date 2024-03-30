@@ -520,8 +520,9 @@ impl Scene {
         text_color: Color,
         background_color: Color,
     ) -> UiNodeId {
+        // TODO: come up with a good default for word wrap here.
         let obj = Text {
-            editor: TextEditor::new(&text),
+            editor: TextEditor::new(&text, 80),
             font_size,
             text_color,
             background_color,

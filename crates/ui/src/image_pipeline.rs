@@ -25,54 +25,101 @@ pub fn layout_text(
 
     let mut drew_cursor = false;
 
-    let text_start = editor
-        .content
-        .byte_slice(editor.content.byte_of_line(editor.text_start_line)..);
+    let max_lines = (area.height() / line_height).ceil() as usize;
+    let layout = editor.layout_lines_naive(max_lines);
 
-    for (i, c) in text_start.chars().enumerate() {
-        let glyph = atlas.map_get_or_insert_glyph(c, font_size, queue).unwrap();
-        let metrics = glyph.metrics;
+    let mut curr_char_idx = 0;
+    for line in layout {
+        for c in line.chars() {
+            let glyph = atlas.map_get_or_insert_glyph(c, font_size, queue).unwrap();
+            let metrics = glyph.metrics;
+
+            // Move to next line
+            if c == '\n' {
+                baseline.1 += line_height;
+                baseline.0 = area.min.0;
+                continue;
+            }
+
+            // Return early if we leave our box
+            if !area.inside(baseline) {
+                return drawables;
+            }
+
+            if curr_char_idx == editor.cursor_position() && draw_cursor {
+                drew_cursor = true;
+                let cursor_height = (font_size * 0.85).floor();
+                let cursor_width = (font_size / 10.0).floor();
+                drawables.push(Drawables::Rect(QuadInstance {
+                    position: [baseline.0, baseline.1 - cursor_height],
+                    size: [cursor_width, cursor_height],
+                    color: [1.0, 1.0, 1.0, 1.0],
+                }));
+            }
+
+            drawables.push(Drawables::TexturedRect(ImageInstance::add_instance(
+                atlas,
+                glyph.texture_id,
+                [baseline.0 + metrics.pos.0, baseline.1 - metrics.pos.1],
+                [metrics.size.0, metrics.size.1],
+                font_color.to_f32_arr(),
+            )));
+
+            baseline.0 += metrics.advance.0;
+            baseline.1 += metrics.advance.1;
+            curr_char_idx += 1;
+        }
 
         // Move to next line
-        if c == '\n' {
-            baseline.1 += line_height;
-            baseline.0 = area.min.0;
-            continue;
-        }
-
-        // Move below, to next line if we would go past the border
-        if baseline.0 - metrics.pos.0 + metrics.size.0 >= area.max.0 {
-            baseline.1 += line_height;
-            baseline.0 = area.min.0;
-        }
-
-        // Return early if we leave our box
-        if !area.inside(baseline) {
-            return drawables;
-        }
-
-        if i == editor.cursor_position && draw_cursor {
-            drew_cursor = true;
-            let cursor_height = (font_size * 0.85).floor();
-            let cursor_width = (font_size / 10.0).floor();
-            drawables.push(Drawables::Rect(QuadInstance {
-                position: [baseline.0, baseline.1 - cursor_height],
-                size: [cursor_width, cursor_height],
-                color: [1.0, 1.0, 1.0, 1.0],
-            }));
-        }
-
-        drawables.push(Drawables::TexturedRect(ImageInstance::add_instance(
-            atlas,
-            glyph.texture_id,
-            [baseline.0 + metrics.pos.0, baseline.1 - metrics.pos.1],
-            [metrics.size.0, metrics.size.1],
-            font_color.to_f32_arr(),
-        )));
-
-        baseline.0 += metrics.advance.0;
-        baseline.1 += metrics.advance.1;
+        baseline.1 += line_height;
+        baseline.0 = area.min.0;
+        continue;
     }
+
+    // for (i, c) in text_start.chars().enumerate() {
+    //     let glyph = atlas.map_get_or_insert_glyph(c, font_size, queue).unwrap();
+    //     let metrics = glyph.metrics;
+
+    //     // Move to next line
+    //     if c == '\n' {
+    //         baseline.1 += line_height;
+    //         baseline.0 = area.min.0;
+    //         continue;
+    //     }
+
+    //     // Move below, to next line if we would go past the border
+    //     if baseline.0 - metrics.pos.0 + metrics.size.0 >= area.max.0 {
+    //         baseline.1 += line_height;
+    //         baseline.0 = area.min.0;
+    //     }
+
+    //     // Return early if we leave our box
+    //     if !area.inside(baseline) {
+    //         return drawables;
+    //     }
+
+    //     if i == editor.cursor_position() && draw_cursor {
+    //         drew_cursor = true;
+    //         let cursor_height = (font_size * 0.85).floor();
+    //         let cursor_width = (font_size / 10.0).floor();
+    //         drawables.push(Drawables::Rect(QuadInstance {
+    //             position: [baseline.0, baseline.1 - cursor_height],
+    //             size: [cursor_width, cursor_height],
+    //             color: [1.0, 1.0, 1.0, 1.0],
+    //         }));
+    //     }
+
+    //     drawables.push(Drawables::TexturedRect(ImageInstance::add_instance(
+    //         atlas,
+    //         glyph.texture_id,
+    //         [baseline.0 + metrics.pos.0, baseline.1 - metrics.pos.1],
+    //         [metrics.size.0, metrics.size.1],
+    //         font_color.to_f32_arr(),
+    //     )));
+
+    //     baseline.0 += metrics.advance.0;
+    //     baseline.1 += metrics.advance.1;
+    // }
 
     if !drew_cursor && draw_cursor {
         let cursor_height = (font_size * 0.85).floor();
