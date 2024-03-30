@@ -4,20 +4,18 @@ use crate::{
     quad_pipeline::QuadInstance,
     texture_atlas::{TextureAtlas, TextureId},
 };
-use crop::Rope;
 use std::{borrow::Cow, cell::RefCell, rc::Rc};
+use text_editor::TextEditor;
 use wgpu::util::DeviceExt;
 
 pub fn layout_text(
     area: BoundingBox,
-    text: Rope,
     atlas: &mut TextureAtlas,
     font_size: f32,
     queue: &wgpu::Queue,
     font_color: &Color,
-    cursor_position: usize,
     draw_cursor: bool,
-    text_start_line: usize,
+    editor: &TextEditor,
 ) -> Vec<Drawables> {
     let mut drawables = vec![];
 
@@ -27,7 +25,9 @@ pub fn layout_text(
 
     let mut drew_cursor = false;
 
-    let text_start = text.byte_slice(text.byte_of_line(text_start_line)..);
+    let text_start = editor
+        .content
+        .byte_slice(editor.content.byte_of_line(editor.text_start_line)..);
 
     for (i, c) in text_start.chars().enumerate() {
         let glyph = atlas.map_get_or_insert_glyph(c, font_size, queue).unwrap();
@@ -51,7 +51,7 @@ pub fn layout_text(
             return drawables;
         }
 
-        if i == cursor_position && draw_cursor {
+        if i == editor.cursor_position && draw_cursor {
             drew_cursor = true;
             let cursor_height = (font_size * 0.85).floor();
             let cursor_width = (font_size / 10.0).floor();

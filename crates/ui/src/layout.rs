@@ -3,12 +3,12 @@ use crate::{
     quad_pipeline::QuadInstance,
     texture_atlas::{TextureAtlas, TextureId},
 };
-use crop::{Rope, RopeBuilder};
 use std::{
     cell::RefCell,
     rc::Rc,
     time::{Duration, Instant},
 };
+use text_editor::{ScrollAmount, TextEditor};
 use winit::{
     event::{ElementState, KeyEvent, MouseScrollDelta},
     keyboard::{KeyCode, PhysicalKey},
@@ -127,9 +127,9 @@ impl FixedSizedBox {
 }
 
 #[derive(Debug)]
-pub struct TextEditor {
+pub struct Text {
     /// Contains all of the text within this text editor.
-    text: Rope,
+    editor: TextEditor,
 
     font_size: f32,
     text_color: Color,
@@ -142,16 +142,9 @@ pub struct TextEditor {
     /// The last time the cursor blinked. Used to alternate drawing the cursor
     /// and create the blinking effect.
     last_cursor_blink: Instant,
-
-    /// The current position of the cursor in the text rope.
-    cursor_position: usize,
-
-    /// This is the line number of the text rope that will be displayed. Anything
-    /// above this number will not be rendered.
-    text_start_line: usize,
 }
 
-impl TextEditor {
+impl Text {
     fn layout(
         &mut self,
         atlas: &mut TextureAtlas,
@@ -187,21 +180,17 @@ impl TextEditor {
 
         drawables.extend(image_pipeline::layout_text(
             view_size,
-            self.text.clone(),
             atlas,
             self.font_size,
             queue,
             &self.text_color,
-            self.cursor_position,
             draw_cursor,
-            self.text_start_line,
+            &self.editor,
         ));
     }
 
     pub fn backspace(&mut self) {
-        let len = self.text.byte_len();
-        self.text.delete(len - 1..len);
-        self.cursor_position -= 1;
+        self.editor.backspace();
     }
 
     pub fn delete(&mut self) {
@@ -212,28 +201,23 @@ impl TextEditor {
     }
 
     pub fn add_char(&mut self, c: &str) {
-        self.text.insert(self.cursor_position, c);
-        self.cursor_position += 1;
+        self.editor.add_char(c);
     }
 
     /// Scrolls the text viewport 'scroll_lines' at a time.
-    pub fn scroll(&mut self, delta: MouseScrollDelta, scroll_lines: usize) {
-        match delta {
+    pub fn scroll(&mut self, delta: MouseScrollDelta, lines: usize) {
+        let scroll_amount = match delta {
             MouseScrollDelta::LineDelta(_, y) => {
                 if y > 0.0 {
-                    // Scroll up
-                    if self.text_start_line.saturating_sub(scroll_lines) > 0 {
-                        self.text_start_line -= scroll_lines;
-                    }
+                    ScrollAmount::Up { lines }
                 } else {
-                    // Scroll down
-                    if self.text_start_line + scroll_lines < self.text.line_len() {
-                        self.text_start_line += scroll_lines;
-                    }
+                    ScrollAmount::Down { lines }
                 }
             }
             MouseScrollDelta::PixelDelta(_) => todo!(),
-        }
+        };
+
+        self.editor.scroll(scroll_amount);
     }
 }
 
@@ -302,7 +286,7 @@ pub enum Ui {
     TexturedRectangle(TexturedRectangle),
     FixedSizedBox(FixedSizedBox),
     Rectangle(Rectangle),
-    Text(RefCell<TextEditor>),
+    Text(RefCell<Text>),
     Hbox(Hbox),
     Vbox(Vbox),
     Spacer,
@@ -536,20 +520,13 @@ impl Scene {
         text_color: Color,
         background_color: Color,
     ) -> UiNodeId {
-        let mut builder = RopeBuilder::new();
-        builder.append(text);
-
-        let text = builder.build();
-        let cursor_position = text.byte_len();
-        let obj = TextEditor {
-            text,
+        let obj = Text {
+            editor: TextEditor::new(&text),
             font_size,
             text_color,
             background_color,
             last_cursor_blink: Instant::now(),
             last_action: Instant::now(),
-            cursor_position,
-            text_start_line: 0,
         };
         let idx = self.nodes.borrow().len();
         self.nodes
