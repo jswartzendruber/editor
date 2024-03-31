@@ -5,6 +5,9 @@ fermentum mi a, sagittis finibus ante. Mauris ac risus metus. In aliquet vitae
 urna nec placerat. Pellentesque habitant morbi tristique senectus et netus et
 malesuada fames ac turpis egestas.
 
+--> ỏ <-- first unicode
+--> 🥳🥳👊🥳🥳👊🥳 <-- emoji
+
 Phasellus aliquam felis sed tortor cursus rutrum. Phasellus volutpat cursus
 risus, quis feugiat quam bibendum eget. Phasellus nec mauris nibh. Donec
 suscipit pharetra nisi, ac rutrum neque bibendum eget. Proin eleifend dolor

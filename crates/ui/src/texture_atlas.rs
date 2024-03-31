@@ -1,7 +1,7 @@
 use crate::texture::Texture;
 use etagere::{Allocation, AtlasAllocator};
 use freetype::face::LoadFlag;
-use image::{ImageError, RgbaImage};
+use image::{DynamicImage, ImageError, RgbaImage};
 use std::collections::HashMap;
 
 #[derive(Debug)]
@@ -49,19 +49,23 @@ pub struct TextureAtlas {
     atlas: AtlasInternal,
     allocations: Vec<Allocation>,
     glyph_map: HashMap<char, FontGlyph>,
-    face: freetype::Face,
+    regular_face: freetype::Face,
+    emoji_face: freetype::Face,
 }
 
 impl TextureAtlas {
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, size: u16) -> Self {
         let library = freetype::Library::init().unwrap();
-        let face = library.new_face("res/RobotoMono-Regular.ttf", 0).unwrap();
+
+        let regular_face = library.new_face("res/RobotoMono-Regular.ttf", 0).unwrap();
+        let emoji_face = library.new_face("res/NotoColorEmoji.ttf", 0).unwrap();
 
         Self {
             atlas: AtlasInternal::new(device, queue, size),
             allocations: vec![],
             glyph_map: HashMap::new(),
-            face,
+            regular_face,
+            emoji_face,
         }
     }
 
@@ -118,6 +122,30 @@ impl TextureAtlas {
         &self.atlas.texture
     }
 
+    fn load_freetype_glyph(
+        face: &freetype::Face,
+        font_size: f32,
+        c: char,
+    ) -> Option<&freetype::GlyphSlot> {
+        let glyph_index = face.get_char_index(c as usize)?;
+
+        if face.has_color() {
+            // This is the only size noto color emoji provides.
+            face.set_char_size(109 * 64, 0, 0, 0).ok()?;
+        } else {
+            face.set_char_size(font_size as isize * 64, 0, 0, 0).ok()?;
+        }
+
+        face.load_glyph(glyph_index, LoadFlag::DEFAULT | LoadFlag::COLOR)
+            .ok()?;
+
+        face.glyph()
+            .render_glyph(freetype::RenderMode::Normal)
+            .ok()?;
+
+        Some(face.glyph())
+    }
+
     pub fn map_get_or_insert_glyph(
         &mut self,
         c: char,
@@ -127,33 +155,90 @@ impl TextureAtlas {
         if let Some(res) = self.glyph_map.get(&c) {
             Some(*res)
         } else {
-            self.face
-                .set_char_size(font_size as isize * 64, 0, 0, 0)
-                .unwrap();
-            self.face.load_char(c as usize, LoadFlag::RENDER).unwrap();
+            let (glyph, is_emoji) = if let Some(glyph) =
+                Self::load_freetype_glyph(&self.regular_face, font_size, c)
+            {
+                (glyph, false)
+            } else if let Some(glyph) = Self::load_freetype_glyph(&self.emoji_face, font_size, c) {
+                (glyph, true)
+            } else {
+                return None;
+            };
 
-            let glyph = self.face.glyph();
-            let glyph_width = glyph.bitmap().width() as f32;
-            let glyph_height = glyph.bitmap().rows() as f32;
+            let mut glyph_width = glyph.bitmap().width() as f32;
+            let mut glyph_height = glyph.bitmap().rows() as f32;
+            let mut advance_x = glyph.advance().x as f32 / 64.0;
+            let mut advance_y = glyph.advance().y as f32 / 64.0;
+            let mut bitmap_left = glyph.bitmap_left() as f32;
+            let mut bitmap_top = glyph.bitmap_top() as f32;
 
-            let image = RgbaImage::from_raw(
-                glyph_width as u32,
-                glyph_height as u32,
-                glyph
-                    .bitmap()
-                    .buffer()
-                    .iter()
-                    .flat_map(|byte| [255, 255, 255, *byte])
-                    .collect(),
-            )
-            .unwrap();
+            let image = if is_emoji {
+                // Image comes in BGRA format. Convert it to RGBA.
+                RgbaImage::from_raw(
+                    glyph_width as u32,
+                    glyph_height as u32,
+                    glyph
+                        .bitmap()
+                        .buffer()
+                        .chunks(4)
+                        .flat_map(|chunk| {
+                            let chunk = chunk.iter().copied().collect::<Vec<_>>();
+                            use std::iter::once;
+                            match chunk.len() {
+                                4 => once(chunk[2])
+                                    .chain(once(chunk[1]))
+                                    .chain(once(chunk[0]))
+                                    .chain(once(chunk[3]))
+                                    .collect(),
+                                _ => Vec::new(),
+                            }
+                        })
+                        .collect(),
+                )
+                .unwrap()
+            } else {
+                RgbaImage::from_raw(
+                    glyph_width as u32,
+                    glyph_height as u32,
+                    glyph
+                        .bitmap()
+                        .buffer()
+                        .iter()
+                        .flat_map(|byte| [255, 255, 255, *byte])
+                        .collect(),
+                )
+                .unwrap()
+            };
+
+            let image = if is_emoji {
+                let line_height = font_size * 1.2;
+                let new_width = ((glyph_width * line_height) / glyph_height).ceil();
+                let new_height = line_height;
+
+                glyph_width = new_width;
+                glyph_height = new_height;
+
+                advance_x = glyph_width;
+                advance_y = 0.0;
+
+                bitmap_left = 0.0;
+                bitmap_top = font_size;
+
+                let image = DynamicImage::from(image);
+                let image = image.resize(
+                    glyph_width as u32,
+                    glyph_height as u32,
+                    image::imageops::FilterType::Gaussian,
+                );
+                image.to_rgba8()
+            } else {
+                image
+            };
+
             let metrics = GlyphMetrics {
-                advance: (
-                    glyph.advance().x as f32 / 64.0,
-                    glyph.advance().y as f32 / 64.0,
-                ),
+                advance: (advance_x, advance_y),
                 size: (glyph_width, glyph_height),
-                pos: (glyph.bitmap_left() as f32, glyph.bitmap_top() as f32),
+                pos: (bitmap_left, bitmap_top),
             };
 
             self.load_char_from_image(queue, &image, c, metrics, font_size)

@@ -19,7 +19,7 @@ pub fn layout_text(
 ) -> Vec<Drawables> {
     let mut drawables = vec![];
 
-    let line_height = font_size * 1.1;
+    let line_height = font_size * 1.2;
     let mut baseline = area.top_left();
     baseline.1 += line_height;
 
@@ -75,51 +75,6 @@ pub fn layout_text(
         baseline.0 = area.min.0;
         continue;
     }
-
-    // for (i, c) in text_start.chars().enumerate() {
-    //     let glyph = atlas.map_get_or_insert_glyph(c, font_size, queue).unwrap();
-    //     let metrics = glyph.metrics;
-
-    //     // Move to next line
-    //     if c == '\n' {
-    //         baseline.1 += line_height;
-    //         baseline.0 = area.min.0;
-    //         continue;
-    //     }
-
-    //     // Move below, to next line if we would go past the border
-    //     if baseline.0 - metrics.pos.0 + metrics.size.0 >= area.max.0 {
-    //         baseline.1 += line_height;
-    //         baseline.0 = area.min.0;
-    //     }
-
-    //     // Return early if we leave our box
-    //     if !area.inside(baseline) {
-    //         return drawables;
-    //     }
-
-    //     if i == editor.cursor_position() && draw_cursor {
-    //         drew_cursor = true;
-    //         let cursor_height = (font_size * 0.85).floor();
-    //         let cursor_width = (font_size / 10.0).floor();
-    //         drawables.push(Drawables::Rect(QuadInstance {
-    //             position: [baseline.0, baseline.1 - cursor_height],
-    //             size: [cursor_width, cursor_height],
-    //             color: [1.0, 1.0, 1.0, 1.0],
-    //         }));
-    //     }
-
-    //     drawables.push(Drawables::TexturedRect(ImageInstance::add_instance(
-    //         atlas,
-    //         glyph.texture_id,
-    //         [baseline.0 + metrics.pos.0, baseline.1 - metrics.pos.1],
-    //         [metrics.size.0, metrics.size.1],
-    //         font_color.to_f32_arr(),
-    //     )));
-
-    //     baseline.0 += metrics.advance.0;
-    //     baseline.1 += metrics.advance.1;
-    // }
 
     if !drew_cursor && draw_cursor {
         let cursor_height = (font_size * 0.85).floor();
