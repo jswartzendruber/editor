@@ -58,7 +58,14 @@ impl TextureAtlas {
         let library = freetype::Library::init().unwrap();
 
         let regular_face = library.new_face("res/RobotoMono-Regular.ttf", 0).unwrap();
-        let emoji_face = library.new_face("res/NotoColorEmoji.ttf", 0).unwrap();
+
+        let emoji_face = if cfg!(windows) {
+            library
+                .new_face("C:\\Windows\\Fonts\\seguiemj.ttf", 0)
+                .unwrap()
+        } else {
+            library.new_face("res/NotoColorEmoji.ttf", 0).unwrap()
+        };
 
         Self {
             atlas: AtlasInternal::new(device, queue, size),
@@ -129,15 +136,16 @@ impl TextureAtlas {
     ) -> Option<&freetype::GlyphSlot> {
         let glyph_index = face.get_char_index(c as usize)?;
 
+        let mut load_flags = LoadFlag::DEFAULT | LoadFlag::RENDER;
         if face.has_color() {
             // This is the only size noto color emoji provides.
+            load_flags |= LoadFlag::COLOR;
             face.set_char_size(109 * 64, 0, 0, 0).ok()?;
         } else {
             face.set_char_size(font_size as isize * 64, 0, 0, 0).ok()?;
         }
 
-        face.load_glyph(glyph_index, LoadFlag::DEFAULT | LoadFlag::COLOR)
-            .ok()?;
+        dbg!(face.load_glyph(glyph_index, dbg!(load_flags))).ok()?;
 
         face.glyph()
             .render_glyph(freetype::RenderMode::Normal)
