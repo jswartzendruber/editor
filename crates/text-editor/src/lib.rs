@@ -61,7 +61,11 @@ impl TextEditor {
     ///
     /// let expected_lines = &["This text ", "should be ", "wrapped se", "veral time", "s."];
     /// ```
-    pub fn layout_lines_naive<'a>(&'a self, max_lines_to_layout: usize) -> Vec<RopeSlice<'a>> {
+    pub fn layout_lines_naive(&self, max_lines_to_layout: usize) -> Vec<RopeSlice<'_>> {
+        if self.content.byte_len() == 0 {
+            return vec![];
+        }
+
         let mut start_idx = self.text_start_idx;
         if start_idx >= self.content.byte_len() {
             panic!(
@@ -113,7 +117,7 @@ impl TextEditor {
     /// Lays out one line from the supplied index into the text buffer.
     /// When we reach the wrap_at limit, or find a newline character,
     /// the slice of this line is returned.
-    pub fn layout_line_naive<'a>(&'a self, idx: usize) -> RopeSlice<'a> {
+    pub fn layout_line_naive(&self, idx: usize) -> RopeSlice<'_> {
         if idx >= self.content.byte_len() {
             panic!(
                 "{}",

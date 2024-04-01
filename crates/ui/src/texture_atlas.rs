@@ -2,20 +2,11 @@ use crate::texture::Texture;
 use etagere::{Allocation, AtlasAllocator};
 use freetype::face::LoadFlag;
 use image::{DynamicImage, ImageError, RgbaImage};
-use std::collections::HashMap;
+use lru::LruCache;
 
 #[derive(Debug)]
 pub enum AtlasError {
-    AllocationError(AllocationError),
     ImageLoadingError(ImageError),
-}
-
-#[derive(Debug)]
-pub enum AllocationError {
-    /// There is no more space in the atlas.
-    /// TODO: use etagere and make this dynamic instead of quitting
-    /// when we run out of space
-    AtlasFull,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -33,14 +24,21 @@ pub struct FontGlyph {
     pub metrics: GlyphMetrics,
     pub texture_id: TextureId,
     pub font_size: f32,
+    allocation_id: etagere::AllocId,
 }
 
 impl FontGlyph {
-    pub fn new(metrics: GlyphMetrics, texture_id: TextureId, font_size: f32) -> Self {
+    pub fn new(
+        metrics: GlyphMetrics,
+        texture_id: TextureId,
+        font_size: f32,
+        allocation_id: etagere::AllocId,
+    ) -> Self {
         Self {
             metrics,
             texture_id,
             font_size,
+            allocation_id,
         }
     }
 }
@@ -54,9 +52,6 @@ pub struct GlyphMapKey {
 pub struct TextureAtlas {
     atlas: AtlasInternal,
     allocations: Vec<Allocation>,
-
-    // Map of (char, font_size) to glyph
-    glyph_map: HashMap<GlyphMapKey, FontGlyph>,
     regular_face: freetype::Face,
     emoji_face: freetype::Face,
 }
@@ -78,7 +73,6 @@ impl TextureAtlas {
         Self {
             atlas: AtlasInternal::new(device, queue, size),
             allocations: vec![],
-            glyph_map: HashMap::new(),
             regular_face,
             emoji_face,
         }
@@ -93,12 +87,17 @@ impl TextureAtlas {
         font_size: f32,
     ) -> Result<TextureId, AtlasError> {
         let texture_id = self.load_from_image(queue, img)?;
-        self.glyph_map.insert(
+        self.atlas.cache.put(
             GlyphMapKey {
                 c,
                 font_size: font_size as u32,
             },
-            FontGlyph::new(metrics, texture_id, font_size),
+            FontGlyph::new(
+                metrics,
+                texture_id,
+                font_size,
+                self.allocations[texture_id.0].id,
+            ),
         );
         Ok(texture_id)
     }
@@ -173,7 +172,7 @@ impl TextureAtlas {
         font_size: f32,
         queue: &wgpu::Queue,
     ) -> Option<FontGlyph> {
-        if let Some(res) = self.glyph_map.get(&GlyphMapKey {
+        if let Some(res) = self.atlas.cache.get(&GlyphMapKey {
             c,
             font_size: font_size as u32,
         }) {
@@ -206,7 +205,7 @@ impl TextureAtlas {
                         .buffer()
                         .chunks(4)
                         .flat_map(|chunk| {
-                            let chunk = chunk.iter().copied().collect::<Vec<_>>();
+                            let chunk = chunk.to_vec();
                             use std::iter::once;
                             match chunk.len() {
                                 4 => once(chunk[2])
@@ -267,7 +266,8 @@ impl TextureAtlas {
 
             self.load_char_from_image(queue, &image, c, metrics, font_size)
                 .unwrap();
-            self.glyph_map
+            self.atlas
+                .cache
                 .get(&GlyphMapKey {
                     c,
                     font_size: font_size as u32,
@@ -285,6 +285,8 @@ struct AtlasInternal {
     texture: Texture,
     /// The size of the atlas
     size: u16,
+    /// Keeps track of how recently the chars have been used
+    cache: LruCache<GlyphMapKey, FontGlyph>,
 }
 
 impl AtlasInternal {
@@ -294,6 +296,7 @@ impl AtlasInternal {
             allocator: AtlasAllocator::new(etagere::size2(size as i32, size as i32)),
             texture: Texture::from_size(device, queue, size),
             size,
+            cache: LruCache::unbounded(),
         }
     }
 
@@ -305,46 +308,57 @@ impl AtlasInternal {
         // Add a small amount of padding to the image to avoid bleeding when looking up in the atlas
         let allocation_size = etagere::size2(img_size.0 as i32 + 2, img_size.1 as i32 + 2);
 
-        let mut allocation = self
-            .allocator
-            .allocate(allocation_size)
-            .ok_or(AtlasError::AllocationError(AllocationError::AtlasFull))?;
+        // If there is no space, deallocate until we have room to allocate.
+        loop {
+            match self.allocator.allocate(allocation_size) {
+                Some(mut allocation) => {
+                    // We have space, complete the allocation
 
-        // Adjust the allocated rectangle to hide the padding
-        // TODO: better way of doing this that is not lying about the size of the allocation and re-using
-        // the allocation type from etagere?
-        allocation.rectangle.min.x += 1;
-        allocation.rectangle.min.y += 1;
-        allocation.rectangle.max.x = allocation.rectangle.min.x + img_size.0 as i32;
-        allocation.rectangle.max.y = allocation.rectangle.min.y + img_size.1 as i32;
+                    // Adjust the allocated rectangle to hide the padding
+                    // TODO: better way of doing this that is not lying about the size of the allocation and re-using
+                    // the allocation type from etagere?
+                    allocation.rectangle.min.x += 1;
+                    allocation.rectangle.min.y += 1;
+                    allocation.rectangle.max.x = allocation.rectangle.min.x + img_size.0 as i32;
+                    allocation.rectangle.max.y = allocation.rectangle.min.y + img_size.1 as i32;
 
-        let xmin = allocation.rectangle.min.x;
-        let ymin = allocation.rectangle.min.y;
+                    let xmin = allocation.rectangle.min.x;
+                    let ymin = allocation.rectangle.min.y;
 
-        queue.write_texture(
-            wgpu::ImageCopyTexture {
-                aspect: wgpu::TextureAspect::All,
-                texture: &self.texture.texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d {
-                    x: xmin as u32,
-                    y: ymin as u32,
-                    z: 0,
-                },
-            },
-            img,
-            wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(4 * img.width()),
-                rows_per_image: None,
-            },
-            wgpu::Extent3d {
-                width: img.width(),
-                height: img.height(),
-                depth_or_array_layers: 1,
-            },
-        );
+                    queue.write_texture(
+                        wgpu::ImageCopyTexture {
+                            aspect: wgpu::TextureAspect::All,
+                            texture: &self.texture.texture,
+                            mip_level: 0,
+                            origin: wgpu::Origin3d {
+                                x: xmin as u32,
+                                y: ymin as u32,
+                                z: 0,
+                            },
+                        },
+                        img,
+                        wgpu::ImageDataLayout {
+                            offset: 0,
+                            bytes_per_row: Some(4 * img.width()),
+                            rows_per_image: None,
+                        },
+                        wgpu::Extent3d {
+                            width: img.width(),
+                            height: img.height(),
+                            depth_or_array_layers: 1,
+                        },
+                    );
 
-        Ok(allocation)
+                    return Ok(allocation);
+                }
+                None => {
+                    // Evict the least recently used glyph.
+                    let entry = self.cache.pop_lru();
+                    if let Some((_, value)) = entry {
+                        self.allocator.deallocate(value.allocation_id);
+                    }
+                }
+            }
+        }
     }
 }
