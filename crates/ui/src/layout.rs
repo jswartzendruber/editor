@@ -1,7 +1,7 @@
 use crate::{
     image_pipeline::{self, ImageInstance},
     quad_pipeline::QuadInstance,
-    texture_atlas::{TextureAtlas, TextureId},
+    texture_atlas::{AllocationInfo, TextureAtlas},
 };
 use std::{
     cell::RefCell,
@@ -64,7 +64,7 @@ impl Rectangle {
 
 #[derive(Debug)]
 pub struct TexturedRectangle {
-    texture_id: TextureId,
+    allocation_info: AllocationInfo,
     tint: Color,
 }
 
@@ -77,7 +77,7 @@ impl TexturedRectangle {
     ) {
         drawables.push(Drawables::TexturedRect(ImageInstance::add_instance(
             atlas,
-            self.texture_id,
+            self.allocation_info,
             [view_size.min.0, view_size.min.1],
             [view_size.width(), view_size.height()],
             self.tint.to_f32_arr(),
@@ -515,9 +515,9 @@ impl Scene {
         UiNodeId(idx)
     }
 
-    pub fn textured_rectangle(&self, texture_id: TextureId) -> UiNodeId {
+    pub fn textured_rectangle(&self, allocation_info: AllocationInfo) -> UiNodeId {
         let obj = TexturedRectangle {
-            texture_id,
+            allocation_info,
             tint: Color::new(255, 255, 255, 255),
         };
         let idx = self.nodes.borrow().len();
@@ -527,8 +527,15 @@ impl Scene {
         UiNodeId(idx)
     }
 
-    pub fn textured_rectangle_tinted(&self, texture_id: TextureId, tint: Color) -> UiNodeId {
-        let obj = TexturedRectangle { texture_id, tint };
+    pub fn textured_rectangle_tinted(
+        &self,
+        allocation_info: AllocationInfo,
+        tint: Color,
+    ) -> UiNodeId {
+        let obj = TexturedRectangle {
+            allocation_info,
+            tint,
+        };
         let idx = self.nodes.borrow().len();
         self.nodes
             .borrow_mut()

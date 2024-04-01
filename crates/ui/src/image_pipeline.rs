@@ -2,7 +2,7 @@ use crate::{
     camera_uniform::CameraUniform,
     layout::{BoundingBox, Color, Drawables},
     quad_pipeline::QuadInstance,
-    texture_atlas::{TextureAtlas, TextureId},
+    texture_atlas::{AllocationInfo, TextureAtlas},
 };
 use std::{borrow::Cow, cell::RefCell, rc::Rc};
 use text_editor::TextEditor;
@@ -59,7 +59,7 @@ pub fn layout_text(
 
             drawables.push(Drawables::TexturedRect(ImageInstance::add_instance(
                 atlas,
-                glyph.texture_id,
+                glyph.allocation_info,
                 [baseline.0 + metrics.pos.0, baseline.1 - metrics.pos.1],
                 [metrics.size.0, metrics.size.1],
                 font_color.to_f32_arr(),
@@ -145,24 +145,23 @@ impl ImageInstance {
 
     pub fn add_instance(
         atlas: &TextureAtlas,
-        texture_id: TextureId,
+        allocation_info: AllocationInfo,
         position: [f32; 2],
         size: [f32; 2],
         color: [f32; 4],
     ) -> Self {
         let atlas_size = atlas.size() as f32;
-        let subimg_dimensions = atlas.get_allocation(texture_id).rectangle;
 
         ImageInstance {
             position,
             size,
             atlas_offset: [
-                subimg_dimensions.min.x as f32 / atlas_size,
-                subimg_dimensions.min.y as f32 / atlas_size,
+                allocation_info.x / atlas_size,
+                allocation_info.y / atlas_size,
             ],
             atlas_scale: [
-                subimg_dimensions.width() as f32 / atlas_size,
-                subimg_dimensions.height() as f32 / atlas_size,
+                allocation_info.width / atlas_size,
+                allocation_info.height / atlas_size,
             ],
             color,
         }

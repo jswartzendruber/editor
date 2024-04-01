@@ -1,5 +1,5 @@
 use crate::texture::Texture;
-use etagere::{Allocation, AtlasAllocator};
+use etagere::{AllocId, Allocation, AtlasAllocator};
 use freetype::face::LoadFlag;
 use image::{DynamicImage, ImageError, RgbaImage};
 use lru::LruCache;
@@ -8,10 +8,6 @@ use lru::LruCache;
 pub enum AtlasError {
     ImageLoadingError(ImageError),
 }
-
-/// An index into the texture atlas's allocated texture array
-#[derive(Debug, Clone, Copy)]
-pub struct TextureId(usize);
 
 /// Contains information from the font rasterizer about how
 /// to draw and position the glyph.
@@ -23,22 +19,31 @@ pub struct GlyphMetrics {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct AllocationInfo {
+    id: AllocId,
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct FontGlyph {
     pub metrics: GlyphMetrics,
-    pub texture_id: TextureId,
-    allocation_id: etagere::AllocId,
+    pub allocation_info: AllocationInfo,
 }
 
 impl FontGlyph {
-    pub fn new(
-        metrics: GlyphMetrics,
-        texture_id: TextureId,
-        allocation_id: etagere::AllocId,
-    ) -> Self {
+    pub fn new(metrics: GlyphMetrics, allocation: Allocation) -> Self {
         Self {
             metrics,
-            texture_id,
-            allocation_id,
+            allocation_info: AllocationInfo {
+                id: allocation.id,
+                x: allocation.rectangle.min.x as f32,
+                y: allocation.rectangle.min.y as f32,
+                width: allocation.rectangle.width() as f32,
+                height: allocation.rectangle.height() as f32,
+            },
         }
     }
 }
@@ -55,10 +60,6 @@ pub struct GlyphMapKey {
 /// A dynamically packed bundle of images. If the atlas is full, the least recently used
 /// glyphs will be evicted until there is room to allocate a new glyph.
 pub struct TextureAtlas {
-    /// Stores allocation info from etagere. 
-    // TODO: If allocations are evicted, this would still contain old references.
-    allocations: Vec<Allocation>,
-
     regular_face: freetype::Face,
     emoji_face: freetype::Face,
 
@@ -90,7 +91,6 @@ impl TextureAtlas {
         };
 
         Self {
-            allocations: vec![],
             regular_face,
             emoji_face,
 
@@ -110,16 +110,16 @@ impl TextureAtlas {
         c: char,
         metrics: GlyphMetrics,
         font_size: f32,
-    ) -> Result<TextureId, AtlasError> {
-        let texture_id = self.load_from_image(queue, img)?;
+    ) -> Result<Allocation, AtlasError> {
+        let texture_allocation = self.load_from_image(queue, img)?;
         self.cache.put(
             GlyphMapKey {
                 c,
                 font_size: font_size as u32,
             },
-            FontGlyph::new(metrics, texture_id, self.allocations[texture_id.0].id),
+            FontGlyph::new(metrics, texture_allocation),
         );
-        Ok(texture_id)
+        Ok(texture_allocation)
     }
 
     /// Allocates the passed in image on the atlas. Returns an ID which allows for
@@ -128,11 +128,9 @@ impl TextureAtlas {
         &mut self,
         queue: &wgpu::Queue,
         img: &RgbaImage,
-    ) -> Result<TextureId, AtlasError> {
+    ) -> Result<Allocation, AtlasError> {
         let allocation = self.allocate(queue, img)?;
-        let idx = self.allocations.len();
-        self.allocations.push(allocation);
-        Ok(TextureId(idx))
+        Ok(allocation)
     }
 
     /// Load an image from a file, and allocate it in the atlas. Returns an ID which
@@ -141,17 +139,12 @@ impl TextureAtlas {
         &mut self,
         queue: &wgpu::Queue,
         path: &str,
-    ) -> Result<TextureId, AtlasError> {
+    ) -> Result<Allocation, AtlasError> {
         let img = image::io::Reader::open(path)
             .unwrap()
             .decode()
             .map_err(AtlasError::ImageLoadingError)?;
         self.load_from_image(queue, &img.to_rgba8())
-    }
-
-    /// Get the allocation details of a given texture_id, i.e. size and id
-    pub fn get_allocation(&self, texture_id: TextureId) -> Allocation {
-        self.allocations[texture_id.0]
     }
 
     /// Get the size of the entire atlas
@@ -357,7 +350,7 @@ impl TextureAtlas {
                     // Evict the least recently used glyph.
                     let entry = self.cache.pop_lru();
                     if let Some((_, value)) = entry {
-                        self.allocator.deallocate(value.allocation_id);
+                        self.allocator.deallocate(value.allocation_info.id);
                     }
                 }
             }
