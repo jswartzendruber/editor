@@ -9,9 +9,12 @@ pub enum AtlasError {
     ImageLoadingError(ImageError),
 }
 
+/// An index into the texture atlas's allocated texture array
 #[derive(Debug, Clone, Copy)]
 pub struct TextureId(usize);
 
+/// Contains information from the font rasterizer about how
+/// to draw and position the glyph.
 #[derive(Debug, Clone, Copy)]
 pub struct GlyphMetrics {
     pub advance: (f32, f32),
@@ -23,7 +26,6 @@ pub struct GlyphMetrics {
 pub struct FontGlyph {
     pub metrics: GlyphMetrics,
     pub texture_id: TextureId,
-    pub font_size: f32,
     allocation_id: etagere::AllocId,
 }
 
@@ -31,32 +33,49 @@ impl FontGlyph {
     pub fn new(
         metrics: GlyphMetrics,
         texture_id: TextureId,
-        font_size: f32,
         allocation_id: etagere::AllocId,
     ) -> Self {
         Self {
             metrics,
             texture_id,
-            font_size,
             allocation_id,
         }
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
+/// A key for a glyph being inserted into the atlas. We store the character
+/// the glyph is of, as well as the font size because glyphs of different
+/// font sizes must be re-rasterized instead of simply scaled up.
 pub struct GlyphMapKey {
     c: char,
     font_size: u32,
 }
 
+/// A dynamically packed bundle of images. If the atlas is full, the least recently used
+/// glyphs will be evicted until there is room to allocate a new glyph.
 pub struct TextureAtlas {
-    atlas: AtlasInternal,
+    /// Stores allocation info from etagere. 
+    // TODO: If allocations are evicted, this would still contain old references.
     allocations: Vec<Allocation>,
+
     regular_face: freetype::Face,
     emoji_face: freetype::Face,
+
+    /// Keeps track of the dynamic allocations we request.
+    allocator: AtlasAllocator,
+    /// The current atlas texture state
+    texture: Texture,
+    /// The size of the atlas
+    size: u16,
+    /// Keeps track of how recently the chars have been used
+    cache: LruCache<GlyphMapKey, FontGlyph>,
 }
 
 impl TextureAtlas {
+    /// Create a new texture atlas. This will also initialize the freetype library, a regular
+    /// and an emoji font face, and set up the atlas allocator and cache.
+    /// TODO: separate the font related setup?
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, size: u16) -> Self {
         let library = freetype::Library::init().unwrap();
 
@@ -71,14 +90,20 @@ impl TextureAtlas {
         };
 
         Self {
-            atlas: AtlasInternal::new(device, queue, size),
             allocations: vec![],
             regular_face,
             emoji_face,
+
+            allocator: AtlasAllocator::new(etagere::size2(size as i32, size as i32)),
+            texture: Texture::from_size(device, queue, size),
+            size,
+            cache: LruCache::unbounded(),
         }
     }
 
-    pub fn load_char_from_image(
+    /// Using the provided image and character, loads the image into the texture atlas and
+    /// saves the character in the glyph cache.
+    fn load_char_from_image(
         &mut self,
         queue: &wgpu::Queue,
         img: &RgbaImage,
@@ -87,17 +112,12 @@ impl TextureAtlas {
         font_size: f32,
     ) -> Result<TextureId, AtlasError> {
         let texture_id = self.load_from_image(queue, img)?;
-        self.atlas.cache.put(
+        self.cache.put(
             GlyphMapKey {
                 c,
                 font_size: font_size as u32,
             },
-            FontGlyph::new(
-                metrics,
-                texture_id,
-                font_size,
-                self.allocations[texture_id.0].id,
-            ),
+            FontGlyph::new(metrics, texture_id, self.allocations[texture_id.0].id),
         );
         Ok(texture_id)
     }
@@ -109,7 +129,7 @@ impl TextureAtlas {
         queue: &wgpu::Queue,
         img: &RgbaImage,
     ) -> Result<TextureId, AtlasError> {
-        let allocation = self.atlas.allocate(queue, img)?;
+        let allocation = self.allocate(queue, img)?;
         let idx = self.allocations.len();
         self.allocations.push(allocation);
         Ok(TextureId(idx))
@@ -129,18 +149,24 @@ impl TextureAtlas {
         self.load_from_image(queue, &img.to_rgba8())
     }
 
+    /// Get the allocation details of a given texture_id, i.e. size and id
     pub fn get_allocation(&self, texture_id: TextureId) -> Allocation {
         self.allocations[texture_id.0]
     }
 
+    /// Get the size of the entire atlas
     pub fn size(&self) -> u16 {
-        self.atlas.size
+        self.size
     }
 
+    /// Get the atlas's entire GPU texture
     pub fn texture(&self) -> &Texture {
-        &self.atlas.texture
+        &self.texture
     }
 
+    /// Given a character and font size, uses freetype to rasterize the glyph. Returns
+    /// a reference to the rasterized glyph, which can be used to get the glyph bitmap,
+    /// font metrics, etc.
     fn load_freetype_glyph(
         face: &freetype::Face,
         font_size: f32,
@@ -166,16 +192,22 @@ impl TextureAtlas {
         Some(face.glyph())
     }
 
+    /// Given the current char and font size, this function checks if the glyph has
+    /// been saved in the atlas. If it has, we return the glyph metrics.
+    /// If the glyph is not in the atlas, we load the glyph using freetype, rasterize
+    /// the glyph, save it in the atlas, and then return the resulting glyph metrics.
     pub fn map_get_or_insert_glyph(
         &mut self,
         c: char,
         font_size: f32,
         queue: &wgpu::Queue,
     ) -> Option<FontGlyph> {
-        if let Some(res) = self.atlas.cache.get(&GlyphMapKey {
+        let glyph_key = GlyphMapKey {
             c,
             font_size: font_size as u32,
-        }) {
+        };
+
+        if let Some(res) = self.cache.get(&glyph_key) {
             Some(*res)
         } else {
             let (glyph, is_emoji) = if let Some(glyph) =
@@ -205,8 +237,8 @@ impl TextureAtlas {
                         .buffer()
                         .chunks(4)
                         .flat_map(|chunk| {
-                            let chunk = chunk.to_vec();
                             use std::iter::once;
+                            let chunk = chunk.to_vec();
                             match chunk.len() {
                                 4 => once(chunk[2])
                                     .chain(once(chunk[1]))
@@ -266,37 +298,7 @@ impl TextureAtlas {
 
             self.load_char_from_image(queue, &image, c, metrics, font_size)
                 .unwrap();
-            self.atlas
-                .cache
-                .get(&GlyphMapKey {
-                    c,
-                    font_size: font_size as u32,
-                })
-                .copied()
-        }
-    }
-}
-
-/// This is used to store images/glyphs together in one texture.
-struct AtlasInternal {
-    /// Keeps track of the dynamic allocations we request.
-    allocator: AtlasAllocator,
-    /// The current atlas texture state
-    texture: Texture,
-    /// The size of the atlas
-    size: u16,
-    /// Keeps track of how recently the chars have been used
-    cache: LruCache<GlyphMapKey, FontGlyph>,
-}
-
-impl AtlasInternal {
-    /// Creates a new square texture atlas with dimensions 'size * size'
-    fn new(device: &wgpu::Device, queue: &wgpu::Queue, size: u16) -> Self {
-        Self {
-            allocator: AtlasAllocator::new(etagere::size2(size as i32, size as i32)),
-            texture: Texture::from_size(device, queue, size),
-            size,
-            cache: LruCache::unbounded(),
+            self.cache.get(&glyph_key).copied()
         }
     }
 

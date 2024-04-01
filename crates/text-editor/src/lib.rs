@@ -14,11 +14,6 @@ pub struct TextEditor {
     /// The current position of the cursor in the text rope.
     cursor_position: usize,
 
-    /// This is the line number of the text rope that will be displayed. Anything
-    /// above this number will not be rendered.
-    /// TODO: REPLACE THIS OLD WAY
-    // do_not_use_text_start_line: usize,
-
     /// The starting index of the text that will be rendered.
     text_start_idx: usize,
 
