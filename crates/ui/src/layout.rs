@@ -204,6 +204,14 @@ impl Text {
         self.editor.add_char(c);
     }
 
+    pub fn increase_font_size(&mut self) {
+        self.font_size += 4.0;
+    }
+
+    pub fn decrease_font_size(&mut self) {
+        self.font_size -= 4.0;
+    }
+
     /// Scrolls the text viewport 'scroll_lines' at a time.
     pub fn scroll(&mut self, delta: MouseScrollDelta, lines: usize) {
         let scroll_amount = match delta {
@@ -320,6 +328,8 @@ pub struct Scene {
     node_root: UiNodeId,
     cursor_pos: (f32, f32),
     focused: Option<UiNodeId>,
+
+    ctrl_down: bool,
 }
 
 impl Default for Scene {
@@ -329,6 +339,8 @@ impl Default for Scene {
             node_root: UiNodeId(0),
             cursor_pos: (0.0, 0.0),
             focused: None,
+
+            ctrl_down: false,
         }
     }
 }
@@ -403,8 +415,22 @@ impl Scene {
                                 KeyCode::Digit7 => "7",
                                 KeyCode::Digit8 => "8",
                                 KeyCode::Digit9 => "9",
-                                KeyCode::Equal => "=",
-                                KeyCode::Minus => "-",
+                                KeyCode::Equal => {
+                                    if self.ctrl_down {
+                                        td.increase_font_size();
+                                        ""
+                                    } else {
+                                        "="
+                                    }
+                                }
+                                KeyCode::Minus => {
+                                    if self.ctrl_down {
+                                        td.decrease_font_size();
+                                        ""
+                                    } else {
+                                        "-"
+                                    }
+                                }
                                 KeyCode::Period => ".",
                                 KeyCode::Quote => "\"",
                                 KeyCode::Semicolon => ";",
@@ -419,6 +445,10 @@ impl Scene {
                                     other_action = true;
                                     td.backspace();
                                     " "
+                                }
+                                KeyCode::ControlLeft | KeyCode::ControlRight => {
+                                    self.ctrl_down = !self.ctrl_down;
+                                    ""
                                 }
                                 // KeyCode::ArrowLeft => {
                                 //     td.cursor_position -= 1;
@@ -522,7 +552,7 @@ impl Scene {
     ) -> UiNodeId {
         // TODO: come up with a good default for word wrap here.
         let obj = Text {
-            editor: TextEditor::new(&text, 80),
+            editor: TextEditor::new(&text, 20),
             font_size,
             text_color,
             background_color,

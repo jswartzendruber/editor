@@ -45,10 +45,18 @@ impl FontGlyph {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct GlyphMapKey {
+    c: char,
+    font_size: u32,
+}
+
 pub struct TextureAtlas {
     atlas: AtlasInternal,
     allocations: Vec<Allocation>,
-    glyph_map: HashMap<char, FontGlyph>,
+
+    // Map of (char, font_size) to glyph
+    glyph_map: HashMap<GlyphMapKey, FontGlyph>,
     regular_face: freetype::Face,
     emoji_face: freetype::Face,
 }
@@ -85,8 +93,13 @@ impl TextureAtlas {
         font_size: f32,
     ) -> Result<TextureId, AtlasError> {
         let texture_id = self.load_from_image(queue, img)?;
-        self.glyph_map
-            .insert(c, FontGlyph::new(metrics, texture_id, font_size));
+        self.glyph_map.insert(
+            GlyphMapKey {
+                c,
+                font_size: font_size as u32,
+            },
+            FontGlyph::new(metrics, texture_id, font_size),
+        );
         Ok(texture_id)
     }
 
@@ -145,7 +158,7 @@ impl TextureAtlas {
             face.set_char_size(font_size as isize * 64, 0, 0, 0).ok()?;
         }
 
-        dbg!(face.load_glyph(glyph_index, dbg!(load_flags))).ok()?;
+        face.load_glyph(glyph_index, load_flags).ok()?;
 
         face.glyph()
             .render_glyph(freetype::RenderMode::Normal)
@@ -160,7 +173,10 @@ impl TextureAtlas {
         font_size: f32,
         queue: &wgpu::Queue,
     ) -> Option<FontGlyph> {
-        if let Some(res) = self.glyph_map.get(&c) {
+        if let Some(res) = self.glyph_map.get(&GlyphMapKey {
+            c,
+            font_size: font_size as u32,
+        }) {
             Some(*res)
         } else {
             let (glyph, is_emoji) = if let Some(glyph) =
@@ -251,7 +267,12 @@ impl TextureAtlas {
 
             self.load_char_from_image(queue, &image, c, metrics, font_size)
                 .unwrap();
-            self.glyph_map.get(&c).copied()
+            self.glyph_map
+                .get(&GlyphMapKey {
+                    c,
+                    font_size: font_size as u32,
+                })
+                .copied()
         }
     }
 }
