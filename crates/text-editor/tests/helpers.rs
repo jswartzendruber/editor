@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
 use crop::RopeSlice;
-use text_editor::TextEditor;
 
 /// Combines several rope slices into one contiguous string
 /// for checking test output.

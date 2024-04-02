@@ -1,22 +1,30 @@
 mod helpers;
 
+use crate::helpers::join_rope_slice;
 use text_editor::{ScrollAmount, TextEditor};
 
 #[test]
-fn scroll_down_input_has_newlines() {
-    // TODO: this
-    // let input = "this input should be wrapped a few times.";
-    // let wrap_at = 10;
-    // let mut editor = TextEditor::new(input, wrap_at);
+fn scroll_several_times() {
+    let input = "this input should be wrapped a few times.";
+    let wrap_at = 10;
+    let mut editor = TextEditor::new(input, wrap_at);
 
-    // let visible_before = visible_text_str(&editor, 10);
-    // let expected_visible_before = "this input\n should be\n wrapped a\n few times\n.\n";
+    let lines_before = editor.layout_lines_naive(80);
+    let line_before = join_rope_slice(&lines_before);
+    let expected_before = "this input\n should be\n wrapped a\n few times\n.\n";
+    assert_eq!(line_before, expected_before);
 
-    // editor.scroll(ScrollAmount::Down { lines: 2 });
+    editor.scroll(ScrollAmount::Down { lines: 2 });
 
-    // let visible_after = visible_text_str(&editor, 10);
-    // let expected_visible_after = " wrapped a\n few times\n.\n";
+    let lines_after = editor.layout_lines_naive(80);
+    let line_after = join_rope_slice(&lines_after);
+    let expected_after = " wrapped a\n few times\n.\n";
+    assert_eq!(line_after, expected_after);
 
-    // assert_eq!(visible_before, expected_visible_before);
-    // assert_eq!(visible_after, expected_visible_after);
+    editor.scroll(ScrollAmount::Up { lines: 3 });
+
+    let lines_before = editor.layout_lines_naive(80);
+    let line_before = join_rope_slice(&lines_before);
+    let expected_before = "this input\n should be\n wrapped a\n few times\n.\n";
+    assert_eq!(line_before, expected_before);
 }

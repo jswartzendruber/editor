@@ -30,3 +30,10 @@ path = "fuzz_targets/multi_line_wrap.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "scroll_random"
+path = "fuzz_targets/scroll_random.rs"
+test = false
+doc = false
+bench = false

@@ -102,7 +102,7 @@ impl TextEditor {
 
             loop_fuel -= 1;
             if loop_fuel <= 0 {
-                panic!("layout_line_naive infinite loop");
+                panic!("layout_lines_naive infinite loop");
             }
         }
 
@@ -179,42 +179,120 @@ impl TextEditor {
 
     pub fn scroll(&mut self, scroll: ScrollAmount) {
         match scroll {
-            ScrollAmount::Up { lines } => {
-                // if self.do_not_use_text_start_line.saturating_sub(lines) > 0 {
-                //     self.do_not_use_text_start_line -= lines;
-                // }
-                todo!();
-            }
-            ScrollAmount::Down { lines } => {
-                self.scroll_down(lines);
-            }
+            ScrollAmount::Up { lines } => self.scroll_up(lines),
+            ScrollAmount::Down { lines } => self.scroll_down(lines),
         }
+    }
+
+    /// Scroll the viewport up 'lines' wrapped lines.
+    fn scroll_up(&mut self, lines: usize) {
+        let mut byte_index = self.text_start_idx;
+
+        // Detect infinite loops when fuzzing.
+        // Not that there are any...
+        let mut loop_fuel = 10000;
+
+        let mut lines_passed = 0;
+
+        while lines_passed < lines {
+            let mut char_count = 0;
+            'line_loop: while byte_index > 0 {
+                // Find the character boundary
+                while (!self.content.is_char_boundary(byte_index) && byte_index > 0)
+                    || byte_index >= self.content.byte_len()
+                {
+                    byte_index -= 1;
+                }
+
+                // See if we have a newline and found the end of the line, or
+                // if we are at our wrap limit.
+                let c = self.content.byte(byte_index);
+                while c == b'\n'
+                    && byte_index <= self.content.byte_len()
+                    && self.content.is_char_boundary(byte_index)
+                {
+                    byte_index -= 1;
+                    break 'line_loop;
+                }
+                if char_count == self.wrap_at {
+                    break;
+                }
+
+                // Include the current character in our set. Update offsets.
+                char_count += 1;
+                if byte_index > 0 {
+                    byte_index -= 1;
+                }
+
+                loop_fuel -= 1;
+                if loop_fuel <= 0 {
+                    panic!("layout_line_naive infinite loop");
+                }
+            }
+
+            lines_passed += 1;
+        }
+
+        while byte_index > 0 && self.content.byte(byte_index - 1) != b'\n' {
+            byte_index -= 1;
+        }
+
+        self.text_start_idx = byte_index;
     }
 
     /// Scroll the viewport down 'lines' wrapped lines.
     fn scroll_down(&mut self, lines: usize) {
-        todo!();
-        // let mut lines_scrolled = 0;
+        let mut byte_index = self.text_start_idx;
 
-        // let mut last_line_start = self.text_start_idx;
-        // let mut slice_start = self.text_start_idx;
-        // while lines_scrolled < lines && slice_start < self.content.byte_len() {
-        //     let lob = self.content.line_of_byte(slice_start);
-        //     let line = self.content.line(lob);
-        //     let mut line_len = line.byte_len();
+        // Detect infinite loops when fuzzing.
+        // Not that there are any...
+        let mut loop_fuel = 10000;
 
-        //     while lines_scrolled < lines && line_len > 0 {
-        //         let slice = line.byte_slice(slice_start..slice_start + self.wrap_at.min(line_len));
-        //         dbg!(slice);
+        let mut lines_passed = 0;
 
-        //         slice_start += self.wrap_at;
-        //         line_len = line_len.saturating_sub(self.wrap_at);
+        while lines_passed < lines {
+            let mut char_count = 0;
+            loop {
+                // Find the character boundary
+                while !self.content.is_char_boundary(byte_index) {
+                    byte_index += 1;
+                }
 
-        //         lines_scrolled += 1;
-        //         last_line_start = slice_start;
-        //     }
-        // }
+                // If we are at the end of the string, we need to cap our
+                // index at the end of the string and bail
+                if byte_index >= self.content.byte_len() {
+                    byte_index = self.content.byte_len();
+                    break;
+                }
 
-        // self.text_start_idx = last_line_start;
+                // See if we have a newline and found the end of the line, or
+                // if we are at our wrap limit.
+                let c = self.content.byte(byte_index);
+                if c == b'\n' || char_count == self.wrap_at {
+                    break;
+                }
+
+                // Include the current character in our set. Update offsets.
+                char_count += 1;
+                byte_index += 1;
+
+                loop_fuel -= 1;
+                if loop_fuel <= 0 {
+                    panic!("layout_line_naive infinite loop");
+                }
+            }
+
+            // skip past the newline character if there was one
+            while byte_index + 1 < self.content.byte_len()
+                && self.content.is_char_boundary(byte_index)
+                && self.content.byte(byte_index) == b'\n'
+            {
+                byte_index += 1;
+            }
+
+            lines_passed += 1;
+        }
+
+        self.text_start_idx = byte_index;
     }
 }
