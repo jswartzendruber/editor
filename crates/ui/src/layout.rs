@@ -201,6 +201,7 @@ impl Text {
     }
 
     pub fn add_char(&mut self, c: &str) {
+        self.last_action = Instant::now();
         self.editor.add_char(c);
     }
 
@@ -213,7 +214,7 @@ impl Text {
     }
 
     /// Scrolls the text viewport 'scroll_lines' at a time.
-    pub fn scroll(&mut self, delta: MouseScrollDelta, lines: usize) {
+    pub fn scroll_delta(&mut self, delta: MouseScrollDelta, lines: usize) {
         let scroll_amount = match delta {
             MouseScrollDelta::LineDelta(_, y) => {
                 if y > 0.0 {
@@ -226,6 +227,10 @@ impl Text {
         };
 
         self.editor.scroll(scroll_amount);
+    }
+
+    pub fn scroll(&mut self, amount: ScrollAmount) {
+        self.editor.scroll(amount);
     }
 }
 
@@ -330,6 +335,7 @@ pub struct Scene {
     focused: Option<UiNodeId>,
 
     ctrl_down: bool,
+    alt_down: bool,
 }
 
 impl Default for Scene {
@@ -341,6 +347,7 @@ impl Default for Scene {
             focused: None,
 
             ctrl_down: false,
+            alt_down: false,
         }
     }
 }
@@ -357,7 +364,7 @@ impl Scene {
     pub fn scroll(&self, delta: MouseScrollDelta) {
         if let Some(focused) = self.focused {
             if let Ui::Text(td) = self.node(focused).as_ref() {
-                td.borrow_mut().scroll(delta, 2);
+                td.borrow_mut().scroll_delta(delta, 2);
             }
         }
     }
@@ -368,106 +375,87 @@ impl Scene {
                 let mut td = td.borrow_mut();
                 if event.state == ElementState::Pressed {
                     match event.physical_key {
-                        PhysicalKey::Code(c) => {
-                            let mut other_action = false;
-
-                            let ch = match c {
-                                KeyCode::KeyA => "a",
-                                KeyCode::KeyB => "b",
-                                KeyCode::KeyC => "c",
-                                KeyCode::KeyD => "d",
-                                KeyCode::KeyE => "e",
-                                KeyCode::KeyF => "f",
-                                KeyCode::KeyG => "g",
-                                KeyCode::KeyH => "h",
-                                KeyCode::KeyI => "i",
-                                KeyCode::KeyJ => "j",
-                                KeyCode::KeyK => "k",
-                                KeyCode::KeyL => "l",
-                                KeyCode::KeyM => "m",
-                                KeyCode::KeyN => "n",
-                                KeyCode::KeyO => "o",
-                                KeyCode::KeyP => "p",
-                                KeyCode::KeyQ => "q",
-                                KeyCode::KeyR => "r",
-                                KeyCode::KeyS => "s",
-                                KeyCode::KeyT => "t",
-                                KeyCode::KeyU => "u",
-                                KeyCode::KeyV => "v",
-                                KeyCode::KeyW => "w",
-                                KeyCode::KeyX => "x",
-                                KeyCode::KeyY => "y",
-                                KeyCode::KeyZ => "z",
-                                KeyCode::Space => " ",
-                                KeyCode::Enter => "\n",
-                                KeyCode::Backquote => "`",
-                                KeyCode::Backslash => "\\",
-                                KeyCode::BracketLeft => "[",
-                                KeyCode::BracketRight => "]",
-                                KeyCode::Comma => ",",
-                                KeyCode::Digit0 => "0",
-                                KeyCode::Digit1 => "1",
-                                KeyCode::Digit2 => "2",
-                                KeyCode::Digit3 => "3",
-                                KeyCode::Digit4 => "4",
-                                KeyCode::Digit5 => "5",
-                                KeyCode::Digit6 => "6",
-                                KeyCode::Digit7 => "7",
-                                KeyCode::Digit8 => "8",
-                                KeyCode::Digit9 => "9",
-                                KeyCode::Equal => {
-                                    if self.ctrl_down {
-                                        td.increase_font_size();
-                                        ""
-                                    } else {
-                                        "="
-                                    }
+                        PhysicalKey::Code(c) => match c {
+                            KeyCode::KeyA => td.add_char("a"),
+                            KeyCode::KeyB => td.add_char("b"),
+                            KeyCode::KeyC => td.add_char("c"),
+                            KeyCode::KeyD => td.add_char("d"),
+                            KeyCode::KeyE => td.add_char("e"),
+                            KeyCode::KeyF => td.add_char("f"),
+                            KeyCode::KeyG => td.add_char("g"),
+                            KeyCode::KeyH => td.add_char("h"),
+                            KeyCode::KeyI => td.add_char("i"),
+                            KeyCode::KeyJ => td.add_char("j"),
+                            KeyCode::KeyK => td.add_char("k"),
+                            KeyCode::KeyL => td.add_char("l"),
+                            KeyCode::KeyM => td.add_char("m"),
+                            KeyCode::KeyN => td.add_char("n"),
+                            KeyCode::KeyO => td.add_char("o"),
+                            KeyCode::KeyP => td.add_char("p"),
+                            KeyCode::KeyQ => td.add_char("q"),
+                            KeyCode::KeyR => td.add_char("r"),
+                            KeyCode::KeyS => td.add_char("s"),
+                            KeyCode::KeyT => td.add_char("t"),
+                            KeyCode::KeyU => td.add_char("u"),
+                            KeyCode::KeyV => td.add_char("v"),
+                            KeyCode::KeyW => td.add_char("w"),
+                            KeyCode::KeyX => td.add_char("x"),
+                            KeyCode::KeyY => td.add_char("y"),
+                            KeyCode::KeyZ => td.add_char("z"),
+                            KeyCode::Space => td.add_char(" "),
+                            KeyCode::Enter => td.add_char("\n"),
+                            KeyCode::Backquote => td.add_char("`"),
+                            KeyCode::Backslash => td.add_char("\\"),
+                            KeyCode::BracketLeft => td.add_char("["),
+                            KeyCode::BracketRight => td.add_char("]"),
+                            KeyCode::Comma => td.add_char(","),
+                            KeyCode::Digit0 => td.add_char("0"),
+                            KeyCode::Digit1 => td.add_char("1"),
+                            KeyCode::Digit2 => td.add_char("2"),
+                            KeyCode::Digit3 => td.add_char("3"),
+                            KeyCode::Digit4 => td.add_char("4"),
+                            KeyCode::Digit5 => td.add_char("5"),
+                            KeyCode::Digit6 => td.add_char("6"),
+                            KeyCode::Digit7 => td.add_char("7"),
+                            KeyCode::Digit8 => td.add_char("8"),
+                            KeyCode::Digit9 => td.add_char("9"),
+                            KeyCode::Equal => {
+                                if self.ctrl_down {
+                                    td.increase_font_size()
+                                } else {
+                                    td.add_char("=")
                                 }
-                                KeyCode::Minus => {
-                                    if self.ctrl_down {
-                                        td.decrease_font_size();
-                                        ""
-                                    } else {
-                                        "-"
-                                    }
-                                }
-                                KeyCode::Period => ".",
-                                KeyCode::Quote => "\"",
-                                KeyCode::Semicolon => ";",
-                                KeyCode::Slash => "/",
-                                KeyCode::Tab => "\t",
-                                KeyCode::Delete => {
-                                    other_action = true;
-                                    td.delete();
-                                    " "
-                                }
-                                KeyCode::Backspace => {
-                                    other_action = true;
-                                    td.backspace();
-                                    " "
-                                }
-                                KeyCode::ControlLeft | KeyCode::ControlRight => {
-                                    self.ctrl_down = !self.ctrl_down;
-                                    ""
-                                }
-                                // KeyCode::ArrowLeft => {
-                                //     td.cursor_position -= 1;
-                                //     " "
-                                // }
-                                // KeyCode::ArrowRight => {
-                                //     if td.cursor_position < td.text.borrow().len() {
-                                //         td.cursor_position += 1;
-                                //     }
-                                //     " "
-                                // }
-                                _ => return,
-                            };
-
-                            td.last_action = Instant::now();
-                            if !other_action {
-                                td.add_char(ch);
                             }
-                        }
+                            KeyCode::Minus => {
+                                if self.ctrl_down {
+                                    td.decrease_font_size();
+                                } else {
+                                    td.add_char("-")
+                                }
+                            }
+                            KeyCode::Period => td.add_char("."),
+                            KeyCode::Quote => td.add_char("\""),
+                            KeyCode::Semicolon => td.add_char(";"),
+                            KeyCode::Slash => td.add_char("/"),
+                            KeyCode::Tab => td.add_char("\t"),
+                            KeyCode::Delete => td.delete(),
+                            KeyCode::Backspace => td.backspace(),
+                            KeyCode::ControlLeft | KeyCode::ControlRight => {
+                                self.ctrl_down = !self.ctrl_down
+                            }
+                            KeyCode::AltLeft | KeyCode::AltRight => self.alt_down = !self.alt_down,
+                            KeyCode::ArrowLeft => {
+                                if self.alt_down {
+                                    td.scroll(ScrollAmount::ToStart)
+                                }
+                            }
+                            KeyCode::ArrowRight => {
+                                if self.alt_down {
+                                    td.scroll(ScrollAmount::ToEnd)
+                                }
+                            }
+                            _ => return,
+                        },
                         _ => todo!(),
                     }
                 }
@@ -559,7 +547,7 @@ impl Scene {
     ) -> UiNodeId {
         // TODO: come up with a good default for word wrap here.
         let obj = Text {
-            editor: TextEditor::new(&text, 20),
+            editor: TextEditor::new(&text, 80),
             font_size,
             text_color,
             background_color,

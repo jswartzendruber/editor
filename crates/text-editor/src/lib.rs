@@ -4,6 +4,8 @@ use crop::{Rope, RopeBuilder, RopeSlice};
 pub enum ScrollAmount {
     Up { lines: usize },
     Down { lines: usize },
+    ToStart,
+    ToEnd,
 }
 
 #[derive(Debug)]
@@ -168,6 +170,10 @@ impl TextEditor {
 
     pub fn backspace(&mut self) {
         let len = self.content.byte_len();
+        if len == 0 {
+            return;
+        }
+
         self.content.delete(len - 1..len);
         self.cursor_position -= 1;
     }
@@ -181,7 +187,22 @@ impl TextEditor {
         match scroll {
             ScrollAmount::Up { lines } => self.scroll_up(lines),
             ScrollAmount::Down { lines } => self.scroll_down(lines),
+            ScrollAmount::ToStart => self.scroll_to_start(),
+            ScrollAmount::ToEnd => self.scroll_to_end(),
         }
+    }
+
+    fn scroll_to_start(&mut self) {
+        self.text_start_idx = 0;
+        self.cursor_position = 0;
+    }
+
+    fn scroll_to_end(&mut self) {
+        let bottom = self.content.byte_len().saturating_sub(1);
+
+        self.text_start_idx = bottom;
+        self.cursor_position = bottom;
+        self.scroll_up(1); // so we aren't totally at the bottom and see nothing
     }
 
     /// Scroll the viewport up 'lines' wrapped lines.
@@ -233,10 +254,7 @@ impl TextEditor {
             lines_passed += 1;
         }
 
-        while byte_index > 0 && self.content.byte(byte_index - 1) != b'\n' {
-            byte_index -= 1;
-        }
-
+        self.cursor_position = byte_index;
         self.text_start_idx = byte_index;
     }
 
@@ -250,19 +268,21 @@ impl TextEditor {
 
         let mut lines_passed = 0;
 
-        while lines_passed < lines {
+        'outer: while lines_passed < lines {
             let mut char_count = 0;
             loop {
                 // Find the character boundary
-                while !self.content.is_char_boundary(byte_index) {
+                while !self.content.is_char_boundary(byte_index)
+                    && byte_index < self.content.byte_len()
+                {
                     byte_index += 1;
                 }
 
                 // If we are at the end of the string, we need to cap our
                 // index at the end of the string and bail
                 if byte_index >= self.content.byte_len() {
-                    byte_index = self.content.byte_len();
-                    break;
+                    byte_index = self.content.byte_len().saturating_sub(1);
+                    break 'outer;
                 }
 
                 // See if we have a newline and found the end of the line, or
@@ -293,6 +313,7 @@ impl TextEditor {
             lines_passed += 1;
         }
 
+        self.cursor_position = byte_index;
         self.text_start_idx = byte_index;
     }
 }

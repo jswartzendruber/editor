@@ -46,6 +46,8 @@ pub fn layout_text(
                 return drawables;
             }
 
+            // TODO: blinking cursor gets out of sync with where we are typing
+            // :) :(
             if curr_char_idx == editor.cursor_position() && draw_cursor {
                 drew_cursor = true;
                 let cursor_height = (font_size * 0.85).floor();
