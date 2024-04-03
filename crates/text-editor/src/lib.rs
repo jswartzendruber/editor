@@ -68,6 +68,10 @@ impl TextEditor {
         self.window_height = new_height;
     }
 
+    pub fn update_font_size(&mut self, new_font_size: f32) {
+        self.font_size = new_font_size;
+    }
+
     /// Get the current position of the cursor
     pub fn cursor_position(&self) -> usize {
         self.cursor_position

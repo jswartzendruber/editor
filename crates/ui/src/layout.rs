@@ -208,10 +208,14 @@ impl Text {
 
     pub fn increase_font_size(&mut self) {
         self.font_size += 4.0;
+        self.editor.update_font_size(self.font_size);
     }
 
     pub fn decrease_font_size(&mut self) {
-        self.font_size -= 4.0;
+        if self.font_size - 4.0 >= 1.0 {
+            self.font_size -= 4.0;
+            self.editor.update_font_size(self.font_size);
+        }
     }
 
     /// Scrolls the text viewport 'scroll_lines' at a time.
@@ -378,7 +382,7 @@ impl Scene {
     ) {
         if let Some(focused) = self.focused {
             if let Ui::Text(td) = self.node(focused).as_ref() {
-                td.borrow_mut().scroll_delta(delta, 2, glyph_rasterizer);
+                td.borrow_mut().scroll_delta(delta, 3, glyph_rasterizer);
             }
         }
     }
@@ -565,7 +569,7 @@ impl Scene {
     ) -> UiNodeId {
         // TODO: way that we don't need to hardcode starting window sizes?
         let obj = Text {
-            editor: TextEditor::new(&text, 1360.0, 720.0, 16.0),
+            editor: TextEditor::new(&text, 1360.0, 720.0, font_size),
             font_size,
             text_color,
             background_color,
