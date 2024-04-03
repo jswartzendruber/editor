@@ -82,41 +82,63 @@ impl TextEditor {
         let mut lines = vec![];
         let line_height = self.font_size * 1.2;
         let start_index = self.text_start_idx;
+        
+        let mut byte_index = start_index;
+        let mut y = 0.0;
+        loop {
+            let (has_trailing_newline, line) = self.layout_line(byte_index, glyph_rasterizer);
+            byte_index += line.byte_len();
+            lines.push(line);
+            y += line_height;
 
-        let mut curr_line_start_index = start_index;
+            if has_trailing_newline {
+                byte_index += 1;
+            }
+
+            if y >= self.window_height {
+                // We are done!
+                break;
+            }
+        }
+
+        lines
+    }
+
+    /// This function will use the glyph metrics to decide when to wrap characters.
+    /// The line ends if:
+    ///  - A newline character is reached, or
+    ///  - We cannot fit any more characters on the current line, or
+    ///  - We reach the end of the internal character rope
+    ///
+    /// We assume that the start of the line is pixel 0, and it ends at pixel 'self.window_width'
+    ///
+    /// Returns: bool: If there is a trailing newline that needs to be consumed
+    ///          RopeSlice: the content of this line
+    fn layout_line(
+        &self,
+        start_index: usize,
+        glyph_rasterizer: &mut impl GlyphRasterizer,
+    ) -> (bool, RopeSlice<'_>) {
         let mut byte_index = start_index;
         let mut x = 0.0;
-        let mut y = 0.0;
         for c in self.content.byte_slice(start_index..).chars() {
             // We've reached the end of this line, save the offsets
             if c == '\n' {
-                lines.push(self.content.byte_slice(curr_line_start_index..byte_index));
-                byte_index += c.len_utf8();
-                curr_line_start_index = byte_index;
-                y += line_height;
-                x = 0.0;
-                continue;
+                return (true, self.content.byte_slice(start_index..byte_index));
             }
 
             let glyph_metrics = glyph_rasterizer.get_glyph(c, self.font_size);
 
             if x + glyph_metrics.advance.0 >= self.window_width {
-                lines.push(self.content.byte_slice(curr_line_start_index..byte_index));
-                curr_line_start_index = byte_index;
-                y += line_height;
-                x = 0.0;
-            } else if y + glyph_metrics.advance.1 >= self.window_height {
-                // We are done!
-                break;
+                return (false, self.content.byte_slice(start_index..byte_index));
             }
 
             x += glyph_metrics.advance.0;
-            y += glyph_metrics.advance.1;
-
             byte_index += c.len_utf8();
         }
 
-        lines
+        // If we haven't returned yet, this is probably the last line
+        (false, self.content.byte_slice(start_index..))
     }
 
     pub fn backspace(&mut self) {

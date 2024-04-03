@@ -134,7 +134,7 @@ impl ImageInstance {
         9 => Float32x4,
     ];
 
-    const MAX: usize = 4096;
+    const MAX: usize = 65536;
 
     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
