@@ -149,9 +149,11 @@ impl Text {
         &mut self,
         atlas: &mut TextureAtlas,
         view_size: BoundingBox,
-        queue: &wgpu::Queue,
         drawables: &mut Vec<Drawables>,
     ) {
+        self.editor
+            .update_window_size(view_size.width(), view_size.height());
+
         // background color
         drawables.push(Drawables::Rect(QuadInstance {
             position: [view_size.min.0, view_size.min.1],
@@ -182,7 +184,6 @@ impl Text {
             view_size,
             atlas,
             self.font_size,
-            queue,
             &self.text_color,
             draw_cursor,
             &self.editor,
@@ -214,7 +215,12 @@ impl Text {
     }
 
     /// Scrolls the text viewport 'scroll_lines' at a time.
-    pub fn scroll_delta(&mut self, delta: MouseScrollDelta, lines: usize) {
+    pub fn scroll_delta(
+        &mut self,
+        delta: MouseScrollDelta,
+        lines: usize,
+        glyph_rasterizer: &mut impl text_editor::GlyphRasterizer,
+    ) {
         let scroll_amount = match delta {
             MouseScrollDelta::LineDelta(_, y) => {
                 if y > 0.0 {
@@ -226,11 +232,15 @@ impl Text {
             MouseScrollDelta::PixelDelta(_) => todo!(),
         };
 
-        self.editor.scroll(scroll_amount);
+        self.editor.scroll(scroll_amount, glyph_rasterizer);
     }
 
-    pub fn scroll(&mut self, amount: ScrollAmount) {
-        self.editor.scroll(amount);
+    pub fn scroll(
+        &mut self,
+        amount: ScrollAmount,
+        glyph_rasterizer: &mut impl text_editor::GlyphRasterizer,
+    ) {
+        self.editor.scroll(amount, glyph_rasterizer);
     }
 }
 
@@ -319,7 +329,7 @@ impl Ui {
             Ui::TexturedRectangle(tr) => tr.layout(atlas, view_size, drawables),
             Ui::FixedSizedBox(fsb) => fsb.layout(scene, atlas, view_size, queue, window, drawables),
             Ui::Rectangle(r) => r.layout(view_size, drawables),
-            Ui::Text(td) => td.borrow_mut().layout(atlas, view_size, queue, drawables),
+            Ui::Text(td) => td.borrow_mut().layout(atlas, view_size, drawables),
             Ui::Hbox(h) => h.layout(scene, atlas, view_size, queue, window, drawables),
             Ui::Vbox(v) => v.layout(scene, atlas, view_size, queue, window, drawables),
             Ui::Spacer => {}
@@ -361,15 +371,23 @@ impl Scene {
         self.node_root = root;
     }
 
-    pub fn scroll(&self, delta: MouseScrollDelta) {
+    pub fn scroll(
+        &self,
+        delta: MouseScrollDelta,
+        glyph_rasterizer: &mut impl text_editor::GlyphRasterizer,
+    ) {
         if let Some(focused) = self.focused {
             if let Ui::Text(td) = self.node(focused).as_ref() {
-                td.borrow_mut().scroll_delta(delta, 2);
+                td.borrow_mut().scroll_delta(delta, 2, glyph_rasterizer);
             }
         }
     }
 
-    pub fn send_keystroke(&mut self, event: &KeyEvent) {
+    pub fn send_keystroke(
+        &mut self,
+        event: &KeyEvent,
+        glyph_rasterizer: &mut impl text_editor::GlyphRasterizer,
+    ) {
         if let Some(focused) = self.focused {
             if let Ui::Text(td) = self.node(focused).as_ref() {
                 let mut td = td.borrow_mut();
@@ -446,15 +464,15 @@ impl Scene {
                             KeyCode::AltLeft | KeyCode::AltRight => self.alt_down = !self.alt_down,
                             KeyCode::ArrowLeft => {
                                 if self.alt_down {
-                                    td.scroll(ScrollAmount::ToStart)
+                                    td.scroll(ScrollAmount::ToStart, glyph_rasterizer)
                                 }
                             }
                             KeyCode::ArrowRight => {
                                 if self.alt_down {
-                                    td.scroll(ScrollAmount::ToEnd)
+                                    td.scroll(ScrollAmount::ToEnd, glyph_rasterizer)
                                 }
                             }
-                            _ => return,
+                            _ => {}
                         },
                         _ => todo!(),
                     }
@@ -545,9 +563,9 @@ impl Scene {
         text_color: Color,
         background_color: Color,
     ) -> UiNodeId {
-        // TODO: come up with a good default for word wrap here.
+        // TODO: way that we don't need to hardcode starting window sizes?
         let obj = Text {
-            editor: TextEditor::new(&text, 80),
+            editor: TextEditor::new(&text, 1360.0, 720.0, 16.0),
             font_size,
             text_color,
             background_color,

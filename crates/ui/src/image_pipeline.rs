@@ -12,7 +12,6 @@ pub fn layout_text(
     area: BoundingBox,
     atlas: &mut TextureAtlas,
     font_size: f32,
-    queue: &wgpu::Queue,
     font_color: &Color,
     draw_cursor: bool,
     editor: &TextEditor,
@@ -25,13 +24,13 @@ pub fn layout_text(
 
     let mut drew_cursor = false;
 
-    let max_lines = (area.height() / line_height).ceil() as usize;
-    let layout = editor.layout_lines_naive(max_lines);
+    // let layout = editor.layout_lines_naive(max_lines, atlas);
+    let layout = editor.layout_lines(atlas);
 
     let mut curr_char_idx = 0;
     for line in layout {
         for c in line.chars() {
-            let glyph = atlas.map_get_or_insert_glyph(c, font_size, queue).unwrap();
+            let glyph = atlas.map_get_or_insert_glyph(c, font_size).unwrap();
             let metrics = glyph.metrics;
 
             // Move to next line
@@ -135,7 +134,7 @@ impl ImageInstance {
         9 => Float32x4,
     ];
 
-    const MAX: usize = 4096;
+    const MAX: usize = 65536;
 
     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {

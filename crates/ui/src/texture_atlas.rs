@@ -3,19 +3,12 @@ use etagere::{AllocId, Allocation, AtlasAllocator};
 use freetype::face::LoadFlag;
 use image::{DynamicImage, ImageError, RgbaImage};
 use lru::LruCache;
+use std::rc::Rc;
+use text_editor::{GlyphMetrics, GlyphRasterizer};
 
 #[derive(Debug)]
 pub enum AtlasError {
     ImageLoadingError(ImageError),
-}
-
-/// Contains information from the font rasterizer about how
-/// to draw and position the glyph.
-#[derive(Debug, Clone, Copy)]
-pub struct GlyphMetrics {
-    pub advance: (f32, f32),
-    pub size: (f32, f32),
-    pub pos: (f32, f32),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -60,6 +53,8 @@ pub struct GlyphMapKey {
 /// A dynamically packed bundle of images. If the atlas is full, the least recently used
 /// glyphs will be evicted until there is room to allocate a new glyph.
 pub struct TextureAtlas {
+    queue: Rc<wgpu::Queue>,
+
     regular_face: freetype::Face,
     emoji_face: freetype::Face,
 
@@ -73,11 +68,17 @@ pub struct TextureAtlas {
     cache: LruCache<GlyphMapKey, FontGlyph>,
 }
 
+impl GlyphRasterizer for TextureAtlas {
+    fn get_glyph(&mut self, c: char, font_size: f32) -> GlyphMetrics {
+        self.map_get_or_insert_glyph(c, font_size).unwrap().metrics
+    }
+}
+
 impl TextureAtlas {
     /// Create a new texture atlas. This will also initialize the freetype library, a regular
     /// and an emoji font face, and set up the atlas allocator and cache.
     /// TODO: separate the font related setup?
-    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, size: u16) -> Self {
+    pub fn new(device: &wgpu::Device, queue: Rc<wgpu::Queue>, size: u16) -> Self {
         let library = freetype::Library::init().unwrap();
 
         let regular_face = library.new_face("res/RobotoMono-Regular.ttf", 0).unwrap();
@@ -90,12 +91,16 @@ impl TextureAtlas {
             library.new_face("res/NotoColorEmoji.ttf", 0).unwrap()
         };
 
+        let texture = Texture::from_size(device, &queue, size);
+
         Self {
+            queue,
+
             regular_face,
             emoji_face,
 
             allocator: AtlasAllocator::new(etagere::size2(size as i32, size as i32)),
-            texture: Texture::from_size(device, queue, size),
+            texture,
             size,
             cache: LruCache::unbounded(),
         }
@@ -105,13 +110,12 @@ impl TextureAtlas {
     /// saves the character in the glyph cache.
     fn load_char_from_image(
         &mut self,
-        queue: &wgpu::Queue,
         img: &RgbaImage,
         c: char,
         metrics: GlyphMetrics,
         font_size: f32,
     ) -> Result<Allocation, AtlasError> {
-        let texture_allocation = self.load_from_image(queue, img)?;
+        let texture_allocation = self.load_from_image(&self.queue.clone(), img)?;
         self.cache.put(
             GlyphMapKey {
                 c,
@@ -189,12 +193,7 @@ impl TextureAtlas {
     /// been saved in the atlas. If it has, we return the glyph metrics.
     /// If the glyph is not in the atlas, we load the glyph using freetype, rasterize
     /// the glyph, save it in the atlas, and then return the resulting glyph metrics.
-    pub fn map_get_or_insert_glyph(
-        &mut self,
-        c: char,
-        font_size: f32,
-        queue: &wgpu::Queue,
-    ) -> Option<FontGlyph> {
+    pub fn map_get_or_insert_glyph(&mut self, c: char, font_size: f32) -> Option<FontGlyph> {
         let glyph_key = GlyphMapKey {
             c,
             font_size: font_size as u32,
@@ -289,7 +288,7 @@ impl TextureAtlas {
                 pos: (bitmap_left, bitmap_top),
             };
 
-            self.load_char_from_image(queue, &image, c, metrics, font_size)
+            self.load_char_from_image(&image, c, metrics, font_size)
                 .unwrap();
             self.cache.get(&glyph_key).copied()
         }
