@@ -222,7 +222,7 @@ impl<'window> State<'window> {
                         self.draw();
                     }
                     WindowEvent::MouseWheel { delta, .. } => {
-                        self.scene.scroll(*delta);
+                        self.scene.scroll(*delta, &mut self.atlas);
                     }
                     WindowEvent::CursorMoved {
                         device_id: _,
@@ -240,7 +240,9 @@ impl<'window> State<'window> {
                             },
                         ..
                     } => elwt.exit(),
-                    WindowEvent::KeyboardInput { event, .. } => self.scene.send_keystroke(event),
+                    WindowEvent::KeyboardInput { event, .. } => {
+                        self.scene.send_keystroke(event, &mut self.atlas)
+                    }
                     _ => {}
                 },
                 _ => {}

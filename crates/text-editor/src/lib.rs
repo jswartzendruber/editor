@@ -82,7 +82,7 @@ impl TextEditor {
         let mut lines = vec![];
         let line_height = self.font_size * 1.2;
         let start_index = self.text_start_idx;
-        
+
         let mut byte_index = start_index;
         let mut y = 0.0;
         loop {
@@ -141,6 +141,34 @@ impl TextEditor {
         (false, self.content.byte_slice(start_index..))
     }
 
+    // Lays out the line in before the one we are on (from start_index). Primarily used for scrolling up.
+    fn layout_line_rev(
+        &self,
+        start_index: usize,
+        glyph_rasterizer: &mut impl GlyphRasterizer,
+    ) -> (bool, RopeSlice<'_>) {
+        let mut byte_index = start_index;
+        let mut x = self.window_width;
+        for c in self.content.byte_slice(..start_index).chars().rev() {
+            // We've reached the start of this line, save the offsets
+            if c == '\n' {
+                return (true, self.content.byte_slice(byte_index..start_index));
+            }
+
+            let glyph_metrics = glyph_rasterizer.get_glyph(c, self.font_size);
+
+            if x - glyph_metrics.advance.0 <= 0.0 {
+                return (false, self.content.byte_slice(byte_index..start_index));
+            }
+
+            x -= glyph_metrics.advance.0;
+            byte_index -= c.len_utf8();
+        }
+
+        // If we haven't returned yet, this is probably the last line
+        (false, self.content.byte_slice(start_index..))
+    }
+
     pub fn backspace(&mut self) {
         let len = self.content.byte_len();
         if len == 0 {
@@ -156,12 +184,12 @@ impl TextEditor {
         self.cursor_position += 1;
     }
 
-    pub fn scroll(&mut self, scroll: ScrollAmount) {
+    pub fn scroll(&mut self, scroll: ScrollAmount, glyph_rasterizer: &mut impl GlyphRasterizer) {
         match scroll {
-            ScrollAmount::Up { lines } => self.scroll_up(lines),
-            ScrollAmount::Down { lines } => self.scroll_down(lines),
+            ScrollAmount::Up { lines } => self.scroll_up(lines, glyph_rasterizer),
+            ScrollAmount::Down { lines } => self.scroll_down(lines, glyph_rasterizer),
             ScrollAmount::ToStart => self.scroll_to_start(),
-            ScrollAmount::ToEnd => self.scroll_to_end(),
+            ScrollAmount::ToEnd => self.scroll_to_end(glyph_rasterizer),
         }
     }
 
@@ -170,123 +198,39 @@ impl TextEditor {
         self.cursor_position = 0;
     }
 
-    fn scroll_to_end(&mut self) {
+    fn scroll_to_end(&mut self, glyph_rasterizer: &mut impl GlyphRasterizer) {
         let bottom = self.content.byte_len().saturating_sub(1);
 
         self.text_start_idx = bottom;
         self.cursor_position = bottom;
-        self.scroll_up(1); // so we aren't totally at the bottom and see nothing
+        self.scroll_up(1, glyph_rasterizer); // so we aren't totally at the bottom and see nothing
     }
 
     /// Scroll the viewport up 'lines' wrapped lines.
-    fn scroll_up(&mut self, lines: usize) {
-        todo!();
-        // let mut byte_index = self.text_start_idx;
+    fn scroll_up(&mut self, lines: usize, glyph_rasterizer: &mut impl GlyphRasterizer) {
+        let mut byte_idx = self.text_start_idx;
 
-        // // Detect infinite loops when fuzzing.
-        // // Not that there are any...
-        // let mut loop_fuel = 10000;
+        for _ in 0..lines {
+            let (_, line) = self.layout_line_rev(byte_idx, glyph_rasterizer);
+            byte_idx = byte_idx.saturating_sub(line.byte_len());
+        }
 
-        // let mut lines_passed = 0;
-
-        // while lines_passed < lines {
-        //     let mut char_count = 0;
-        //     while byte_index > 0 {
-        //         // Find the character boundary
-        //         while (!self.content.is_char_boundary(byte_index) && byte_index > 0)
-        //             || byte_index >= self.content.byte_len()
-        //         {
-        //             byte_index -= 1;
-        //         }
-
-        //         // See if we have a newline and found the end of the line, or
-        //         // if we are at our wrap limit.
-        //         // let c = self.content.byte(byte_index);
-        //         // while c == b'\n'
-        //         //     && byte_index <= self.content.byte_len()
-        //         //     && self.content.is_char_boundary(byte_index)
-        //         // {
-        //         //     byte_index -= 1;
-        //         //     break 'line_loop;
-        //         // }
-        //         if char_count == self.wrap_at {
-        //             break;
-        //         }
-
-        //         // Include the current character in our set. Update offsets.
-        //         char_count += 1;
-        //         byte_index = byte_index.saturating_sub(1);
-
-        //         loop_fuel -= 1;
-        //         if loop_fuel <= 0 {
-        //             panic!("layout_line_naive infinite loop");
-        //         }
-        //     }
-
-        //     lines_passed += 1;
-        // }
-
-        // self.cursor_position = byte_index;
-        // self.text_start_idx = byte_index;
+        self.text_start_idx = byte_idx;
     }
 
     /// Scroll the viewport down 'lines' wrapped lines.
-    fn scroll_down(&mut self, lines: usize) {
-        todo!();
-        // let mut byte_index = self.text_start_idx;
+    fn scroll_down(&mut self, lines: usize, glyph_rasterizer: &mut impl GlyphRasterizer) {
+        let mut byte_idx = self.text_start_idx;
 
-        // // Detect infinite loops when fuzzing.
-        // // Not that there are any...
-        // let mut loop_fuel = 10000;
+        for _ in 0..lines {
+            let (has_trailing_newline, line) = self.layout_line(byte_idx, glyph_rasterizer);
+            if has_trailing_newline {
+                byte_idx += 1;
+            }
 
-        // let mut lines_passed = 0;
+            byte_idx += line.byte_len();
+        }
 
-        // 'outer: while lines_passed < lines {
-        //     let mut char_count = 0;
-        //     loop {
-        //         // Find the character boundary
-        //         while !self.content.is_char_boundary(byte_index)
-        //             && byte_index < self.content.byte_len()
-        //         {
-        //             byte_index += 1;
-        //         }
-
-        //         // If we are at the end of the string, we need to cap our
-        //         // index at the end of the string and bail
-        //         if byte_index >= self.content.byte_len() {
-        //             byte_index = self.content.byte_len().saturating_sub(1);
-        //             break 'outer;
-        //         }
-
-        //         // See if we have a newline and found the end of the line, or
-        //         // if we are at our wrap limit.
-        //         let c = self.content.byte(byte_index);
-        //         if c == b'\n' || char_count == self.wrap_at {
-        //             break;
-        //         }
-
-        //         // Include the current character in our set. Update offsets.
-        //         char_count += 1;
-        //         byte_index += 1;
-
-        //         loop_fuel -= 1;
-        //         if loop_fuel <= 0 {
-        //             panic!("layout_line_naive infinite loop");
-        //         }
-        //     }
-
-        //     // skip past the newline character if there was one
-        //     while byte_index + 1 < self.content.byte_len()
-        //         && self.content.is_char_boundary(byte_index)
-        //         && self.content.byte(byte_index) == b'\n'
-        //     {
-        //         byte_index += 1;
-        //     }
-
-        //     lines_passed += 1;
-        // }
-
-        // self.cursor_position = byte_index;
-        // self.text_start_idx = byte_index;
+        self.text_start_idx = byte_idx;
     }
 }
