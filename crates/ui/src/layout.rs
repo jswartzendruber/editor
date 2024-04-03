@@ -149,9 +149,11 @@ impl Text {
         &mut self,
         atlas: &mut TextureAtlas,
         view_size: BoundingBox,
-        queue: &wgpu::Queue,
         drawables: &mut Vec<Drawables>,
     ) {
+        self.editor
+            .update_window_size(view_size.width(), view_size.height());
+
         // background color
         drawables.push(Drawables::Rect(QuadInstance {
             position: [view_size.min.0, view_size.min.1],
@@ -182,7 +184,6 @@ impl Text {
             view_size,
             atlas,
             self.font_size,
-            queue,
             &self.text_color,
             draw_cursor,
             &self.editor,
@@ -319,7 +320,7 @@ impl Ui {
             Ui::TexturedRectangle(tr) => tr.layout(atlas, view_size, drawables),
             Ui::FixedSizedBox(fsb) => fsb.layout(scene, atlas, view_size, queue, window, drawables),
             Ui::Rectangle(r) => r.layout(view_size, drawables),
-            Ui::Text(td) => td.borrow_mut().layout(atlas, view_size, queue, drawables),
+            Ui::Text(td) => td.borrow_mut().layout(atlas, view_size, drawables),
             Ui::Hbox(h) => h.layout(scene, atlas, view_size, queue, window, drawables),
             Ui::Vbox(v) => v.layout(scene, atlas, view_size, queue, window, drawables),
             Ui::Spacer => {}
@@ -454,7 +455,7 @@ impl Scene {
                                     td.scroll(ScrollAmount::ToEnd)
                                 }
                             }
-                            _ => return,
+                            _ => {}
                         },
                         _ => todo!(),
                     }
@@ -545,9 +546,9 @@ impl Scene {
         text_color: Color,
         background_color: Color,
     ) -> UiNodeId {
-        // TODO: come up with a good default for word wrap here.
+        // TODO: way that we don't need to hardcode starting window sizes?
         let obj = Text {
-            editor: TextEditor::new(&text, 80),
+            editor: TextEditor::new(&text, 1360.0, 720.0, 16.0),
             font_size,
             text_color,
             background_color,

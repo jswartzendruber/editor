@@ -24,7 +24,7 @@ struct State<'window> {
     window: &'window Window,
     surface: wgpu::Surface<'window>,
     device: wgpu::Device,
-    queue: wgpu::Queue,
+    queue: Rc<wgpu::Queue>,
     config: wgpu::SurfaceConfiguration,
 
     camera_uniform: Rc<RefCell<CameraUniform>>,
@@ -62,6 +62,7 @@ impl<'window> State<'window> {
             None,
         ))
         .expect("Failed to create device");
+        let queue = Rc::new(queue);
 
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -82,7 +83,7 @@ impl<'window> State<'window> {
             0,
         )));
 
-        let atlas = TextureAtlas::new(&device, &queue, 1024);
+        let atlas = TextureAtlas::new(&device, queue.clone(), 1024);
 
         let quad_pipeline = QuadPipeline::new(&device, camera_uniform.clone());
         let image_pipeline = ImagePipeline::new(&device, camera_uniform.clone(), &atlas);
