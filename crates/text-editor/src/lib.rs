@@ -154,8 +154,11 @@ impl TextEditor {
         let mut byte_index = start_index;
         let mut x = self.window_width;
         for c in self.content.byte_slice(..start_index).chars().rev() {
-            // We've reached the start of this line, save the offsets
-            if c == '\n' {
+            if c == '\n' && byte_index == start_index {
+                byte_index = byte_index.saturating_sub(1);
+                continue;
+            } else if c == '\n' {
+                // We've reached the start of this line, save the offsets
                 return (true, self.content.byte_slice(byte_index..start_index));
             }
 
