@@ -233,9 +233,21 @@ impl TextEditor {
             return;
         }
 
-        // TODO: fix backspace for emojis
-        self.content
-            .delete(self.cursor_position..self.cursor_position + 1)
+        // Find char boundry one character back
+        let mut curr_pos = self.cursor_position;
+        loop {
+            curr_pos += 1;
+
+            if curr_pos >= self.content.byte_len() {
+                return;
+            }
+
+            if self.content.is_char_boundary(curr_pos) {
+                break;
+            }
+        }
+
+        self.content.delete(self.cursor_position..curr_pos)
     }
 
     pub fn backspace(&mut self) {
