@@ -23,9 +23,9 @@ pub fn layout_text(
     baseline.1 += line_height;
 
     let mut drew_cursor = false;
+    let mut curr_byte_index = editor.text_start_idx();
     let layout = editor.layout_lines(atlas);
 
-    let mut curr_char_idx = 0;
     for line in layout {
         for c in line.chars() {
             let glyph = atlas.map_get_or_insert_glyph(c, font_size).unwrap();
@@ -45,7 +45,7 @@ pub fn layout_text(
 
             // TODO: blinking cursor gets out of sync with where we are typing
             // :) :(
-            if curr_char_idx == editor.cursor_position() && draw_cursor {
+            if curr_byte_index == editor.cursor_position() && draw_cursor {
                 drew_cursor = true;
                 let cursor_height = (font_size * 0.85).floor();
                 let cursor_width = (font_size / 10.0).floor();
@@ -66,7 +66,7 @@ pub fn layout_text(
 
             baseline.0 += metrics.advance.0;
             baseline.1 += metrics.advance.1;
-            curr_char_idx += 1;
+            curr_byte_index += c.len_utf8();
         }
 
         // Move to next line

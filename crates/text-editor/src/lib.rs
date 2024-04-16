@@ -85,6 +85,11 @@ impl TextEditor {
         self.cursor_position
     }
 
+    /// Get the starting position of the text area that will be rendered
+    pub fn text_start_idx(&self) -> usize {
+        self.text_start_idx
+    }
+
     /// This function will use the glyph metrics to decide when to wrap characters.
     /// A line ends if:
     ///  - A newline character is reached, or
@@ -206,6 +211,16 @@ impl TextEditor {
             return;
         }
 
+        // Find char boundry one character back
+        let mut curr_pos = self.cursor_position;
+        loop {
+            curr_pos = curr_pos.saturating_sub(1);
+
+            if self.content.is_char_boundary(curr_pos) {
+                break;
+            }
+        }
+
         self.content
             .delete(self.cursor_position - 1..self.cursor_position);
         self.cursor_position -= 1;
@@ -219,6 +234,7 @@ impl TextEditor {
         for c in text.chars() {
             bytes_to_advance += c.len_utf8();
         }
+        dbg!(bytes_to_advance);
         self.cursor_position += bytes_to_advance;
     }
 
