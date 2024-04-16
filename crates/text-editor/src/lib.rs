@@ -1,3 +1,4 @@
+use copypasta::{ClipboardContext, ClipboardProvider};
 use crop::{Rope, RopeBuilder, RopeSlice};
 
 /// Contains information needed to lay out a glyph on the screen.
@@ -23,7 +24,6 @@ pub enum ScrollAmount {
     ToEnd,
 }
 
-#[derive(Debug)]
 pub struct TextEditor {
     /// Contains all of the text inside of this text editor.
     content: Rope,
@@ -42,6 +42,12 @@ pub struct TextEditor {
 
     /// Window height in pixels
     window_height: f32,
+
+    /// Is the control key currently pressed?
+    pub ctrl_down: bool,
+
+    /// Handle to the system clipboard for copy/paste
+    clipboard_context: ClipboardContext,
 }
 
 impl TextEditor {
@@ -60,6 +66,8 @@ impl TextEditor {
             font_size,
             window_width,
             window_height,
+            ctrl_down: false,
+            clipboard_context: ClipboardContext::new().unwrap(),
         }
     }
 
@@ -176,6 +184,12 @@ impl TextEditor {
         (false, self.content.byte_slice(start_index..))
     }
 
+    /// Paste content from the system clipboard to the text area at the current position
+    pub fn paste(&mut self) {
+        let clipboard_contents = self.clipboard_context.get_contents().unwrap();
+        self.insert_text(&clipboard_contents);
+    }
+
     pub fn delete(&mut self) {
         let len = self.content.byte_len();
         if len == 0 || self.cursor_position + 1 > self.content.byte_len() {
@@ -197,9 +211,15 @@ impl TextEditor {
         self.cursor_position -= 1;
     }
 
-    pub fn add_char(&mut self, c: &str) {
-        self.content.insert(self.cursor_position, c);
-        self.cursor_position += 1;
+    pub fn insert_text(&mut self, text: &str) {
+        self.content.insert(self.cursor_position, text);
+
+        // Needed to handle emojis correctly, as well as regular ascii
+        let mut bytes_to_advance = 0;
+        for c in text.chars() {
+            bytes_to_advance += c.len_utf8();
+        }
+        self.cursor_position += bytes_to_advance;
     }
 
     pub fn scroll(&mut self, scroll: ScrollAmount, glyph_rasterizer: &mut impl GlyphRasterizer) {

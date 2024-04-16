@@ -126,7 +126,6 @@ impl FixedSizedBox {
     }
 }
 
-#[derive(Debug)]
 pub struct Text {
     /// Contains all of the text within this text editor.
     editor: TextEditor,
@@ -200,7 +199,7 @@ impl Text {
 
     pub fn add_char(&mut self, c: &str) {
         self.last_action = Instant::now();
-        self.editor.add_char(c);
+        self.editor.insert_text(c);
     }
 
     pub fn increase_font_size(&mut self) {
@@ -305,7 +304,6 @@ impl Vbox {
     }
 }
 
-#[derive(Debug)]
 pub enum Ui {
     TexturedRectangle(TexturedRectangle),
     FixedSizedBox(FixedSizedBox),
@@ -338,7 +336,6 @@ impl Ui {
     }
 }
 
-#[derive(Debug)]
 pub struct Scene {
     nodes: RefCell<Vec<Rc<Ui>>>,
     node_root: UiNodeId,
@@ -386,9 +383,10 @@ impl Scene {
         if let Some(focused) = self.focused {
             if let Ui::Text(td) = self.node(focused).as_ref() {
                 let mut td = td.borrow_mut();
-                if event.state == ElementState::Pressed {
-                    match &event.logical_key {
+                match event.state {
+                    ElementState::Pressed => match &event.logical_key {
                         Key::Named(n) => match n {
+                            NamedKey::Control => td.editor.ctrl_down = true,
                             NamedKey::Enter => td.add_char("\n"),
                             NamedKey::Tab => td.add_char("    "), // TODO: handle tabs more correctly
                             NamedKey::Space => td.add_char(" "),
@@ -398,9 +396,22 @@ impl Scene {
                             NamedKey::Delete => td.delete(),
                             _ => {}
                         },
-                        Key::Character(c) => td.add_char(c),
+                        Key::Character(c) => {
+                            if c.eq_ignore_ascii_case("v") && td.editor.ctrl_down {
+                                td.editor.paste()
+                            } else {
+                                td.add_char(c)
+                            }
+                        }
                         _ => {}
-                    }
+                    },
+                    ElementState::Released => match &event.logical_key {
+                        Key::Named(n) => match n {
+                            NamedKey::Control => td.editor.ctrl_down = false,
+                            _ => {}
+                        },
+                        _ => {}
+                    },
                 }
             }
         }
