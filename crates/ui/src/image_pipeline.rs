@@ -23,8 +23,6 @@ pub fn layout_text(
     baseline.1 += line_height;
 
     let mut drew_cursor = false;
-
-    // let layout = editor.layout_lines_naive(max_lines, atlas);
     let layout = editor.layout_lines(atlas);
 
     let mut curr_char_idx = 0;

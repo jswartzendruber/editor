@@ -176,13 +176,24 @@ impl TextEditor {
         (false, self.content.byte_slice(start_index..))
     }
 
-    pub fn backspace(&mut self) {
+    pub fn delete(&mut self) {
         let len = self.content.byte_len();
-        if len == 0 {
+        if len == 0 || self.cursor_position + 1 > self.content.byte_len() {
             return;
         }
 
-        self.content.delete(len - 1..len);
+        self.content
+            .delete(self.cursor_position..self.cursor_position + 1)
+    }
+
+    pub fn backspace(&mut self) {
+        let len = self.content.byte_len();
+        if len == 0 || self.cursor_position == 0 {
+            return;
+        }
+
+        self.content
+            .delete(self.cursor_position - 1..self.cursor_position);
         self.cursor_position -= 1;
     }
 

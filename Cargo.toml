@@ -1,14 +1,8 @@
-[package]
-name = "editor"
-version = "0.1.0"
-edition = "2021"
-
 [workspace]
 members = [ 
+    "crates/editor",
     "crates/text-editor",
     "crates/ui",
 ]
-
-[dependencies]
-ui = { path = "crates/ui" }
-env_logger = "0.11"
+default-members = [ "crates/editor" ]
+resolver = "2"

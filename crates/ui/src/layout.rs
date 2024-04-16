@@ -11,7 +11,7 @@ use std::{
 use text_editor::{ScrollAmount, TextEditor};
 use winit::{
     event::{ElementState, KeyEvent, MouseScrollDelta},
-    keyboard::{KeyCode, PhysicalKey},
+    keyboard::{Key, KeyCode, NamedKey, PhysicalKey},
     window::Window,
 };
 
@@ -195,10 +195,7 @@ impl Text {
     }
 
     pub fn delete(&mut self) {
-        todo!()
-        // self.text
-        //     .borrow_mut()
-        //     .replace_range(self.cursor_position..self.cursor_position + 1, "");
+        self.editor.delete();
     }
 
     pub fn add_char(&mut self, c: &str) {
@@ -396,89 +393,19 @@ impl Scene {
             if let Ui::Text(td) = self.node(focused).as_ref() {
                 let mut td = td.borrow_mut();
                 if event.state == ElementState::Pressed {
-                    match event.physical_key {
-                        PhysicalKey::Code(c) => match c {
-                            KeyCode::KeyA => td.add_char("a"),
-                            KeyCode::KeyB => td.add_char("b"),
-                            KeyCode::KeyC => td.add_char("c"),
-                            KeyCode::KeyD => td.add_char("d"),
-                            KeyCode::KeyE => td.add_char("e"),
-                            KeyCode::KeyF => td.add_char("f"),
-                            KeyCode::KeyG => td.add_char("g"),
-                            KeyCode::KeyH => td.add_char("h"),
-                            KeyCode::KeyI => td.add_char("i"),
-                            KeyCode::KeyJ => td.add_char("j"),
-                            KeyCode::KeyK => td.add_char("k"),
-                            KeyCode::KeyL => td.add_char("l"),
-                            KeyCode::KeyM => td.add_char("m"),
-                            KeyCode::KeyN => td.add_char("n"),
-                            KeyCode::KeyO => td.add_char("o"),
-                            KeyCode::KeyP => td.add_char("p"),
-                            KeyCode::KeyQ => td.add_char("q"),
-                            KeyCode::KeyR => td.add_char("r"),
-                            KeyCode::KeyS => td.add_char("s"),
-                            KeyCode::KeyT => td.add_char("t"),
-                            KeyCode::KeyU => td.add_char("u"),
-                            KeyCode::KeyV => td.add_char("v"),
-                            KeyCode::KeyW => td.add_char("w"),
-                            KeyCode::KeyX => td.add_char("x"),
-                            KeyCode::KeyY => td.add_char("y"),
-                            KeyCode::KeyZ => td.add_char("z"),
-                            KeyCode::Space => td.add_char(" "),
-                            KeyCode::Enter => td.add_char("\n"),
-                            KeyCode::Backquote => td.add_char("`"),
-                            KeyCode::Backslash => td.add_char("\\"),
-                            KeyCode::BracketLeft => td.add_char("["),
-                            KeyCode::BracketRight => td.add_char("]"),
-                            KeyCode::Comma => td.add_char(","),
-                            KeyCode::Digit0 => td.add_char("0"),
-                            KeyCode::Digit1 => td.add_char("1"),
-                            KeyCode::Digit2 => td.add_char("2"),
-                            KeyCode::Digit3 => td.add_char("3"),
-                            KeyCode::Digit4 => td.add_char("4"),
-                            KeyCode::Digit5 => td.add_char("5"),
-                            KeyCode::Digit6 => td.add_char("6"),
-                            KeyCode::Digit7 => td.add_char("7"),
-                            KeyCode::Digit8 => td.add_char("8"),
-                            KeyCode::Digit9 => td.add_char("9"),
-                            KeyCode::Equal => {
-                                if self.ctrl_down {
-                                    td.increase_font_size()
-                                } else {
-                                    td.add_char("=")
-                                }
-                            }
-                            KeyCode::Minus => {
-                                if self.ctrl_down {
-                                    td.decrease_font_size();
-                                } else {
-                                    td.add_char("-")
-                                }
-                            }
-                            KeyCode::Period => td.add_char("."),
-                            KeyCode::Quote => td.add_char("\""),
-                            KeyCode::Semicolon => td.add_char(";"),
-                            KeyCode::Slash => td.add_char("/"),
-                            KeyCode::Tab => td.add_char("\t"),
-                            KeyCode::Delete => td.delete(),
-                            KeyCode::Backspace => td.backspace(),
-                            KeyCode::ControlLeft | KeyCode::ControlRight => {
-                                self.ctrl_down = !self.ctrl_down
-                            }
-                            KeyCode::AltLeft | KeyCode::AltRight => self.alt_down = !self.alt_down,
-                            KeyCode::ArrowLeft => {
-                                if self.alt_down {
-                                    td.scroll(ScrollAmount::ToStart, glyph_rasterizer)
-                                }
-                            }
-                            KeyCode::ArrowRight => {
-                                if self.alt_down {
-                                    td.scroll(ScrollAmount::ToEnd, glyph_rasterizer)
-                                }
-                            }
+                    match &event.logical_key {
+                        Key::Named(n) => match n {
+                            NamedKey::Enter => td.add_char("\n"),
+                            NamedKey::Tab => td.add_char("    "), // TODO: handle tabs more correctly
+                            NamedKey::Space => td.add_char(" "),
+                            NamedKey::End => td.scroll(ScrollAmount::ToEnd, glyph_rasterizer),
+                            NamedKey::Home => td.scroll(ScrollAmount::ToStart, glyph_rasterizer),
+                            NamedKey::Backspace => td.backspace(),
+                            NamedKey::Delete => td.delete(),
                             _ => {}
                         },
-                        _ => todo!(),
+                        Key::Character(c) => td.add_char(c),
+                        _ => {}
                     }
                 }
             }
