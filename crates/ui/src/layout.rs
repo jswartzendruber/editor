@@ -11,7 +11,7 @@ use std::{
 use text_editor::{ScrollAmount, TextEditor};
 use winit::{
     event::{ElementState, KeyEvent, MouseScrollDelta},
-    keyboard::{Key, KeyCode, NamedKey, PhysicalKey},
+    keyboard::{Key, NamedKey},
     window::Window,
 };
 
@@ -344,9 +344,6 @@ pub struct Scene {
     node_root: UiNodeId,
     cursor_pos: (f32, f32),
     focused: Option<UiNodeId>,
-
-    ctrl_down: bool,
-    alt_down: bool,
 }
 
 impl Default for Scene {
@@ -356,9 +353,6 @@ impl Default for Scene {
             node_root: UiNodeId(0),
             cursor_pos: (0.0, 0.0),
             focused: None,
-
-            ctrl_down: false,
-            alt_down: false,
         }
     }
 }
