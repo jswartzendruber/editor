@@ -386,6 +386,8 @@ impl Scene {
                 match event.state {
                     ElementState::Pressed => match &event.logical_key {
                         Key::Named(n) => match n {
+                            NamedKey::ArrowLeft => td.editor.left(),
+                            NamedKey::ArrowRight => td.editor.right(),
                             NamedKey::Control => td.editor.ctrl_down = true,
                             NamedKey::Enter => td.add_char("\n"),
                             NamedKey::Tab => td.add_char("    "), // TODO: handle tabs more correctly

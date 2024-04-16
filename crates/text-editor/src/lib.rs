@@ -195,12 +195,45 @@ impl TextEditor {
         self.insert_text(&clipboard_contents);
     }
 
+    /// Move the cursor one position to the left.
+    pub fn left(&mut self) {
+        let mut curr_pos = self.cursor_position;
+        loop {
+            curr_pos = curr_pos.saturating_sub(1);
+
+            if self.content.is_char_boundary(curr_pos) {
+                break;
+            }
+        }
+
+        self.cursor_position = curr_pos;
+    }
+
+    /// Move the cursor one position to the right.
+    pub fn right(&mut self) {
+        let mut curr_pos = self.cursor_position;
+        loop {
+            curr_pos += 1;
+
+            if curr_pos >= self.content.byte_len() {
+                return;
+            }
+
+            if self.content.is_char_boundary(curr_pos) {
+                break;
+            }
+        }
+
+        self.cursor_position = curr_pos;
+    }
+
     pub fn delete(&mut self) {
         let len = self.content.byte_len();
         if len == 0 || self.cursor_position + 1 > self.content.byte_len() {
             return;
         }
 
+        // TODO: fix backspace for emojis
         self.content
             .delete(self.cursor_position..self.cursor_position + 1)
     }
@@ -221,9 +254,8 @@ impl TextEditor {
             }
         }
 
-        self.content
-            .delete(self.cursor_position - 1..self.cursor_position);
-        self.cursor_position -= 1;
+        self.content.delete(curr_pos..self.cursor_position);
+        self.cursor_position = curr_pos;
     }
 
     pub fn insert_text(&mut self, text: &str) {
@@ -234,7 +266,7 @@ impl TextEditor {
         for c in text.chars() {
             bytes_to_advance += c.len_utf8();
         }
-        dbg!(bytes_to_advance);
+
         self.cursor_position += bytes_to_advance;
     }
 
