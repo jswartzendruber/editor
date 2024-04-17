@@ -398,13 +398,14 @@ impl Scene {
                             NamedKey::Delete => td.delete(),
                             _ => {}
                         },
-                        Key::Character(c) => {
-                            if c.eq_ignore_ascii_case("v") && td.editor.ctrl_down {
+                        Key::Character(c) => match c.as_str() {
+                            c if c.eq_ignore_ascii_case("v") && td.editor.ctrl_down => {
                                 td.editor.paste()
-                            } else {
-                                td.add_char(c)
                             }
-                        }
+                            c if c == "-" && td.editor.ctrl_down => td.decrease_font_size(),
+                            c if c == "=" && td.editor.ctrl_down => td.increase_font_size(),
+                            _ => td.add_char(c),
+                        },
                         _ => {}
                     },
                     ElementState::Released => match &event.logical_key {
