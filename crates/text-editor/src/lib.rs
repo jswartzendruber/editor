@@ -1,4 +1,3 @@
-use copypasta::{ClipboardContext, ClipboardProvider};
 use crop::{Rope, RopeBuilder, RopeSlice};
 
 /// Contains information needed to lay out a glyph on the screen.
@@ -45,9 +44,6 @@ pub struct TextEditor {
 
     /// Is the control key currently pressed?
     pub ctrl_down: bool,
-
-    /// Handle to the system clipboard for copy/paste
-    clipboard_context: ClipboardContext,
 }
 
 impl TextEditor {
@@ -67,7 +63,6 @@ impl TextEditor {
             window_width,
             window_height,
             ctrl_down: false,
-            clipboard_context: ClipboardContext::new().unwrap(),
         }
     }
 
@@ -187,12 +182,6 @@ impl TextEditor {
 
         // If we haven't returned yet, this is probably the last line
         (false, self.content.byte_slice(start_index..))
-    }
-
-    /// Paste content from the system clipboard to the text area at the current position
-    pub fn paste(&mut self) {
-        let clipboard_contents = self.clipboard_context.get_contents().unwrap();
-        self.insert_text(&clipboard_contents);
     }
 
     /// Move the cursor one position to the left.

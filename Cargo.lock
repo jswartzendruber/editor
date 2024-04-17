@@ -2098,7 +2098,6 @@ dependencies = [
 name = "text-editor"
 version = "0.1.0"
 dependencies = [
- "copypasta",
  "crop",
 ]
 
@@ -2230,6 +2229,7 @@ name = "ui"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "copypasta",
  "etagere",
  "freetype-rs",
  "image",

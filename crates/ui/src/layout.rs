@@ -3,6 +3,7 @@ use crate::{
     quad_pipeline::QuadInstance,
     texture_atlas::{AllocationInfo, TextureAtlas},
 };
+use copypasta::{ClipboardContext, ClipboardProvider};
 use std::{
     cell::RefCell,
     rc::Rc,
@@ -341,6 +342,9 @@ pub struct Scene {
     node_root: UiNodeId,
     cursor_pos: (f32, f32),
     focused: Option<UiNodeId>,
+
+    /// Handle to the system clipboard for copy/paste
+    clipboard_context: ClipboardContext,
 }
 
 impl Default for Scene {
@@ -350,6 +354,7 @@ impl Default for Scene {
             node_root: UiNodeId(0),
             cursor_pos: (0.0, 0.0),
             focused: None,
+            clipboard_context: ClipboardContext::new().unwrap(),
         }
     }
 }
@@ -400,7 +405,9 @@ impl Scene {
                         },
                         Key::Character(c) => match c.as_str() {
                             c if c.eq_ignore_ascii_case("v") && td.editor.ctrl_down => {
-                                td.editor.paste()
+                                let clipboard_contents =
+                                    self.clipboard_context.get_contents().unwrap();
+                                td.editor.insert_text(&clipboard_contents);
                             }
                             c if c == "-" && td.editor.ctrl_down => td.decrease_font_size(),
                             c if c == "=" && td.editor.ctrl_down => td.increase_font_size(),
